@@ -27,6 +27,14 @@ spring:
   application:
     name: conversational-filtering-agent
 
+# Vertex AI Ranking API (Discovery Engine) — semantic reranking for pooled / retrieved records.
+# REST: POST .../v1/projects/{project}/locations/global/rankingConfigs/default_ranking_config:rank
+vertex-ai-ranking:
+  # Follows Google's current default reranker; upgrades are managed by GCP.
+  model: semantic-ranker-default@latest
+  # Backup if @latest causes issues — pin to stable 004 (swap with line above):
+  # model: semantic-ranker-default-004
+
 # GCP Conversational Commerce - always enabled
 # transport: "rest" (default) or "grpc" - rest bypasses ALPN/VPN issues
 # Set project-id (or GCP_PROJECT_ID); placement and branch derive from it when not overridden.
