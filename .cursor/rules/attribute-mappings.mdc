@@ -1,0 +1,68 @@
+---
+description: When adding attribute mappings, always send canonical values to the GCP API
+globs: backend/src/main/resources/application.yml
+alwaysApply: false
+---
+
+# Attribute Mappings: Always Send Canonical Values
+
+When adding new attributes (display mapping or value expansion):
+
+1. **attribute-display-mapping** – Maps API values to display text (e.g. `F: Frozen`). For UI only; does not change what we send.
+
+2. **attribute-value-expansion** – Maps short/user input to canonical API values. **Required** when the API returns abbreviated values (F, C) that cause RETAIL_IRRELEVANT if sent as-is. Always add expansion for any abbreviated codes.
+
+## Checklist for New Attributes
+
+When adding a new attribute (e.g. `attributes.newDimension`):
+
+- [ ] Add `attribute-display-mapping` for readable UI labels
+- [ ] Add `attribute-value-expansion` for every short/abbreviated value the API might return or user might send (maps short → canonical before sending to GCP)
+
+Example:
+
+```yaml
+attribute-display-mapping:
+  newDimension:
+    S: Small
+    L: Large
+attribute-value-expansion:
+  newDimension:
+    S: SMALL
+    L: LARGE
+```
+
+## Template keys in `application.yml`
+
+The repo ships with starter mappings for common retail facets. **Keys must match `productAttributeValue.name` after stripping the `attributes.` prefix** (e.g. `attributes.type` → key `type`). GCP does not publish a fixed list; your catalog’s facetable / conversational attributes determine what appears. Inspect raw conversational responses or product JSON to add or adjust keys.
+
+| Key | Purpose |
+|-----|---------|
+| `storageType` / `stockType` | Frozen, refrigerated, ambient, dry storage (incl. unnamed `S`/`R`/`D` values) |
+| `departments` | Taxonomy / aisle codes (e.g. `syy_cust_tax_*` placeholders) |
+| `dietary` | Organic, gluten-free, vegan, kosher, halal, etc. |
+| `allergens` | Contains / free-from flags |
+| `unitOfMeasure` | EA, CS, LB, pack units |
+| `apparelSize` | XS–XXL if apparel |
+| `color` | Short color codes (`BLK`, `WHT`, …) |
+| `colorFamilies` | Retail rollup color family names |
+| `type` | Product subtype (e.g. decoration type in tests) |
+| `sizes` / `packageSize` | Pack or unit size (`12oz`, `24oz`, …) |
+| `materials` / `material` | Material codes |
+| `pattern` / `style` / `occasion` | Merchandising facets |
+| `flavor` / `scent` | Food / HBA |
+| `packageType` | Bottle, box, can, etc. |
+| `countryOfOrigin` | Origin codes |
+| `categories` | High-level category codes |
+| `gender` / `ageGroup` | Demographic facets |
+| `brandId` / `brands` | Brand codes and display (`attributes.brands`) |
+| `length` / `capacity` / `dimensions` | Size / measure |
+| `finish` / `shape` / `form` | Physical descriptors |
+| `grade` / `cut` / `variety` / `species` | Food taxonomy |
+| `region` / `roast` / `caffeine` | Beverage / origin |
+| `servingSize` / `count` / `sheetCount` / `ply` | Pack counts |
+| `voltage` / `wattage` | Electrical |
+| `fit` / `season` / `collection` / `line` | Apparel / seasonal |
+| `alcoholContent` | ABV / alcohol-free |
+
+Add display + expansion pairs whenever you add a new facet the agent might ask about. **Expansion** (`attribute-value-expansion`) is required where short or ambiguous user/API values must become canonical before GCP.

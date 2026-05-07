@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conversational-filtering-agent-backend
+  labels:
+    app: conversational-filtering-agent-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: conversational-filtering-agent-backend
+  template:
+    metadata:
+      labels:
+        app: conversational-filtering-agent-backend
+    spec:
+      containers:
+        - name: backend
+          image: conversational-filtering-agent-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: conversational-filtering-agent-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /swagger-ui/index.html
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/models
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 5
+          # Uncomment to mount GCP service account key
+          # volumeMounts:
+          #   - name: gcp-credentials
+          #     mountPath: /secrets
+          #     readOnly: true
+      # volumes:
+      #   - name: gcp-credentials
+      #     secret:
+      #       secretName: gcp-credentials

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: conversational-filtering-agent-config
+  labels:
+    app: conversational-filtering-agent
+data:
+  # GCP Retail API - override with your project
+  GCP_PROJECT_ID: "1062538070694"
+  GCP_QUOTA_PROJECT: "1062538070694"
+  # Conversational Commerce - REST transport recommended for K8s
+  CONVERSATIONAL_COMMERCE_TRANSPORT: "rest"
+  CONVERSATIONAL_FILTERING_MODE: "ENABLED"
+  # Backend-only: frontend is served separately
+  APP_SERVE_FRONTEND: "false"

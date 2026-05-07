@@ -1,0 +1,9 @@
+target
+!target/*.jar
+*.log
+.git
+.gitignore
+*.md
+**/__tests__
+**/*.test.*
+**/*.spec.*

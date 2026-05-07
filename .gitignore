@@ -1,0 +1,22 @@
+# Environment and secrets - do not commit
+.env
+.env.local
+*.pem
+*-credentials.json
+
+# Local config - copy from application.yml.example
+backend/src/main/resources/application.yml
+
+# Build output
+target/
+**/target/
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+
+# Python (scripts/)
+__pycache__/
+*.py[cod]

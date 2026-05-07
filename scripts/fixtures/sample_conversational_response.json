@@ -1,0 +1,13 @@
+{
+  "conversationId": "conv-123",
+  "refinedSearch": [{"query": "princess decorations"}],
+  "userQueryTypes": ["SIMPLE_PRODUCT_SEARCH"],
+  "conversationalFilteringResult": {
+    "followupQuestion": "What type of decoration?",
+    "suggestedAnswers": [
+      {"productAttributeValue": {"name": "attributes.type", "value": "Balloons"}},
+      {"productAttributeValue": {"name": "attributes.type", "value": "Streamers"}},
+      {"productAttributeValue": {"name": "attributes.brands", "value": "NIKE"}}
+    ]
+  }
+}

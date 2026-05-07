@@ -1,0 +1,2 @@
+# Optional: merge_collected_into_application_yml.py (comment-preserving YAML writes)
+ruamel.yaml>=0.18.0

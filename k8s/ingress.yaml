@@ -1,0 +1,46 @@
+# Ingress routes / to frontend and /api, /swagger-ui, /v3 to backend.
+# Requires an ingress controller (nginx, traefik, etc.).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: conversational-filtering-agent
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    # cert-manager.io/cluster-issuer: letsencrypt-prod  # if using cert-manager
+spec:
+  # tls:
+  #   - hosts:
+  #       - your-domain.com
+  #     secretName: conversational-filtering-agent-tls
+  rules:
+    - host: your-domain.com  # Change to your domain or remove for default
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: conversational-filtering-agent-backend
+                port:
+                  number: 80
+          - path: /swagger-ui
+            pathType: Prefix
+            backend:
+              service:
+                name: conversational-filtering-agent-backend
+                port:
+                  number: 80
+          - path: /v3
+            pathType: Prefix
+            backend:
+              service:
+                name: conversational-filtering-agent-backend
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: conversational-filtering-agent-frontend
+                port:
+                  number: 80

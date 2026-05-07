@@ -1,0 +1,3 @@
+# Test profile - minimal config
+conversational-commerce:
+  transport: rest

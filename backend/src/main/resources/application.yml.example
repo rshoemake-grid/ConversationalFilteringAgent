@@ -1,0 +1,365 @@
+server:
+  port: 8080
+
+# Environment variables (reference / defaults). Prefer OS env or secrets in production.
+env:
+  GOOGLE_API_KEY: ${GOOGLE_API_KEY:}
+
+# CORS - use specific origins in production (e.g. https://your-frontend.com)
+app:
+  cors:
+    allowed-origins: "*"
+  gcp:
+    # GCP credentials path. Override with GOOGLE_APPLICATION_CREDENTIALS env var.
+    credentials-path: ${GOOGLE_APPLICATION_CREDENTIALS:C:/Users/rsho0016/AppData/Roaming/gcloud/application_default_credentials.json}
+  gemini:
+    # ADK / Gemini (Approach B), clarifying-question generator, GET /api/models. Keys from Google AI Studio.
+    # Set env.GOOGLE_API_KEY above, or export GOOGLE_API_KEY (application.yml is gitignored when copied).
+    api-key: ${env.GOOGLE_API_KEY:${GOOGLE_API_KEY:}}
+    model: ${GEMINI_MODEL:gemini-flash-latest}
+
+# REST API docs (default: /v3/api-docs, /swagger-ui/index.html)
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+
+spring:
+  application:
+    name: conversational-filtering-agent
+
+# GCP Conversational Commerce - always enabled
+# transport: "rest" (default) or "grpc" - rest bypasses ALPN/VPN issues
+# Set project-id (or GCP_PROJECT_ID); placement and branch derive from it when not overridden.
+# Copy this file to application.yml and adjust. application.yml is gitignored.
+conversational-commerce:
+  transport: ${CONVERSATIONAL_COMMERCE_TRANSPORT:rest}
+  project-id: ${GCP_PROJECT_ID:your-project-id}
+  placement: ${GCP_PLACEMENT:projects/${conversational-commerce.project-id}/locations/global/catalogs/default_catalog/placements/default_search}
+  branch: ${GCP_BRANCH:projects/${conversational-commerce.project-id}/locations/global/catalogs/default_catalog/branches/default_branch}
+  default-visitor-id: default-visitor
+  # ENABLED lets the agent ask follow-up questions. Requires GCP Console setup (see CONFIG.md).
+  conversational-filtering-mode: ${CONVERSATIONAL_FILTERING_MODE:DISABLED}
+  # GCP returns attributes.stockType; use "stockType" for product filters
+  stock-type-filter-attribute: ${STOCK_TYPE_FILTER_ATTRIBUTE:stockType}
+  # Max products returned per search (REST and gRPC)
+  product-search-page-size: ${PRODUCT_SEARCH_PAGE_SIZE:20}
+  # Above this count we ask to narrow
+  product-count-threshold: ${PRODUCT_COUNT_THRESHOLD:50}
+  # Attribute mappings - see .cursor/rules/attribute-mappings.mdc
+  #
+  # Conversational filtering returns productAttributeValue.name like "attributes.<key>"; BrandDisplayResolver
+  # strips the "attributes." prefix and looks up the key below. Keys come from your catalog and
+  # raw API responses. Use scripts/collect_conversational_filtering_attributes.py to discover values.
+  #
+  # Display: API value -> label for UI. Expansion: user/short input -> canonical value for GCP.
+  attribute-display-mapping:
+    storageType:  # Stock / storage (D/R/S and F/C codes)
+      F: Frozen
+      C: Refrigerated
+      S: Ambient
+      R: Refrigerated
+      D: Dry storage
+      FROZEN: Frozen
+      REFRIGERATED: Refrigerated
+      AMBIENT: Ambient
+      DRY_STORAGE: Dry storage
+      COOLER: Refrigerated
+      FREEZER: Frozen
+      ROOM_TEMP: Ambient
+    stockType:  # Same codes as storageType when filters use attributes.stockType
+      F: Frozen
+      C: Refrigerated
+      S: Ambient
+      R: Refrigerated
+      D: Dry storage
+      FROZEN: Frozen
+      REFRIGERATED: Refrigerated
+      AMBIENT: Ambient
+      DRY_STORAGE: Dry storage
+    departments:  # Department taxonomy (replace with your catalog)
+      syy_cust_tax_meatseafood: Meat & Seafood
+      syy_cust_tax_frozenfoods: Frozen Foods
+      syy_cust_tax_canneddry: Canned & Dry
+      syy_cust_tax_produce: Produce
+      syy_cust_tax_bakerybread: Bakery & Bread
+      syy_cust_tax_disposables: Disposables
+      syy_cust_tax_equipmentsupplies: Equipment & Supplies
+      syy_cust_tax_dairy: Dairy
+      syy_cust_tax_deli: Deli
+      syy_cust_tax_beverages: Beverages
+      syy_cust_tax_snacks: Snacks
+      syy_cust_tax_condiments: Condiments & Sauces
+      syy_cust_tax_paper: Paper & Cleaning
+    dietary:  # Diet / certification claims (adjust canonical keys to match catalog)
+      ORGANIC: Organic
+      NON_GMO: Non-GMO
+      GLUTEN_FREE: Gluten free
+      GF: Gluten free
+      VEGAN: Vegan
+      KOSHER: Kosher
+      HALAL: Halal
+      PLANT_BASED: Plant based
+    allergens:  # Allergen / free-from flags
+      CONTAINS_MILK: Contains milk
+      CONTAINS_NUTS: Contains nuts
+      CONTAINS_SOY: Contains soy
+      CONTAINS_WHEAT: Contains wheat
+      CONTAINS_EGG: Contains egg
+      DAIRY_FREE: Dairy free
+      NUT_FREE: Nut free
+    unitOfMeasure:  # Sell unit / pack
+      EA: Each
+      CS: Case
+      LB: Pound
+      OZ: Ounce
+      GAL: Gallon
+      CT: Count
+      PK: Pack
+      BG: Bag
+      BX: Box
+    apparelSize:  # Apparel sizing if used
+      XS: XS
+      S: S
+      M: M
+      L: L
+      XL: XL
+      XXL: XXL
+    color:  # Custom color attribute (attributes.color)
+      BLK: Black
+      WHT: White
+      RED: Red
+      BLU: Blue
+      GRN: Green
+      NAVY: Navy
+      GRAY: Gray
+    colorFamilies:  # Rollup key colorFamilies (Retail search)
+      Black: Black
+      White: White
+      Red: Red
+      Blue: Blue
+      Green: Green
+      Multicolor: Multicolor
+    type:  # Product / decoration / subtype
+      Balloons: Balloons
+      Streamers: Streamers
+      Tablecloths: Tablecloths
+    sizes:  # Pack / unit size when API sends attributes.sizes or unnamed size values
+      "12oz": 12 oz
+      "24oz": 24 oz
+      "16oz": 16 oz
+      "32oz": 32 oz
+      "1gal": 1 gal
+      "1L": 1 L
+    packageSize:  # Alternate key some catalogs use
+      "12oz": 12 oz
+      "24oz": 24 oz
+    materials:  # attributes.materials
+      PLASTIC: Plastic
+      PAPER: Paper
+      METAL: Metal
+      GLASS: Glass
+      WOOD: Wood
+      FABRIC: Fabric
+    material:
+      PLASTIC: Plastic
+      PAPER: Paper
+    pattern:
+      SOLID: Solid
+      STRIPED: Striped
+      PLAID: Plaid
+    style:
+      MODERN: Modern
+      CLASSIC: Classic
+    occasion:
+      PARTY: Party
+      WEDDING: Wedding
+      BIRTHDAY: Birthday
+    flavor:
+      VANILLA: Vanilla
+      CHOCOLATE: Chocolate
+      ORIGINAL: Original
+    scent:
+      LAVENDER: Lavender
+      UNSCENTED: Unscented
+    packageType:
+      BOTTLE: Bottle
+      BOX: Box
+      BAG: Bag
+      CAN: Can
+      JAR: Jar
+    countryOfOrigin:
+      US: United States
+      MX: Mexico
+      CA: Canada
+    categories:  # High-level category codes (replace with your taxonomy)
+      MEAT: Meat
+      SEAFOOD: Seafood
+      PRODUCE: Produce
+    gender:
+      MENS: Men's
+      WOMENS: Women's
+      UNISEX: Unisex
+    ageGroup:
+      ADULT: Adult
+      KIDS: Kids
+    brandId:  # Opaque brand IDs — map to display when known
+      NIKE: Nike
+      ADIDAS: Adidas
+    brands:  # System / custom brands (attributes.brands); also used for title-case fallback
+      NIKE: Nike
+      ADIDAS: Adidas
+      PUMA: Puma
+      REEBOK: Reebok
+      BHB/NPM: BHB/NPM
+      CAB: Cab
+    length:
+      "6ft": 6 ft
+      "8ft": 8 ft
+    capacity:
+      "1QT": 1 qt
+      "2QT": 2 qt
+    finish:
+      MATTE: Matte
+      GLOSS: Gloss
+    shape:
+      ROUND: Round
+      RECTANGLE: Rectangle
+    form:
+      LIQUID: Liquid
+      POWDER: Powder
+    grade:
+      CHOICE: Choice
+      PRIME: Prime
+    cut:
+      RIBEYE: Ribeye
+      SIRLOIN: Sirloin
+    variety:
+      BASMATI: Basmati
+      JASMINE: Jasmine
+    region:
+      ITALY: Italy
+      FRANCE: France
+    roast:
+      LIGHT: Light
+      MEDIUM: Medium
+      DARK: Dark
+    caffeine:
+      CAFFEINATED: Caffeinated
+      DECAF: Decaf
+    servingSize:
+      "1ct": 1 count
+    count:
+      "12ct": 12 count
+      "24ct": 24 count
+    sheetCount:
+      "100ct": 100 sheets
+    ply:
+      "1PLY": 1-ply
+      "2PLY": 2-ply
+    dimensions:
+      "8x10": 8 x 10
+    voltage:
+      "120V": 120 V
+    wattage:
+      "60W": 60 W
+    fit:
+      REGULAR: Regular
+      SLIM: Slim
+    season:
+      SUMMER: Summer
+      WINTER: Winter
+    collection:
+      CORE: Core
+    line:
+      PRO: Pro
+    species:
+      SALMON: Salmon
+      TUNA: Tuna
+    alcoholContent:
+      "0pct": Alcohol free
+    # Add more catalog-specific keys as they appear in raw API responses (Raw API Response panel).
+  # Expansion: maps user text to canonical values before GCP (avoids RETAIL_IRRELEVANT).
+  attribute-value-expansion:
+    storageType:
+      F: FROZEN
+      C: REFRIGERATED
+      Frozen: FROZEN
+      frozen: FROZEN
+      Refrigerated: R
+      refrigerated: R
+      ambient: S
+      Ambient: S
+      Shelf: S
+      shelf: S
+      Dry: D
+      dry: D
+      "dry storage": D
+      "Dry storage": D
+      cooler: R
+      Cooler: R
+      freezer: F
+      Freezer: F
+    stockType:
+      F: FROZEN
+      C: REFRIGERATED
+      S: AMBIENT
+      R: REFRIGERATED
+      D: DRY_STORAGE
+      Frozen: FROZEN
+      Refrigerated: REFRIGERATED
+      Ambient: AMBIENT
+      "dry storage": DRY_STORAGE
+    dietary:
+      organic: ORGANIC
+      Organic: ORGANIC
+      gf: GLUTEN_FREE
+      GF: GLUTEN_FREE
+      "gluten free": GLUTEN_FREE
+      "Gluten free": GLUTEN_FREE
+      vegan: VEGAN
+      Vegan: VEGAN
+      kosher: KOSHER
+      halal: HALAL
+      "non-gmo": NON_GMO
+      "plant based": PLANT_BASED
+    allergens:
+      "dairy free": DAIRY_FREE
+      "nut free": NUT_FREE
+    unitOfMeasure:
+      each: EA
+      case: CS
+      pound: LB
+      bag: BG
+    apparelSize:
+      xs: XS
+      s: S
+      m: M
+      l: L
+      xl: XL
+      xxl: XXL
+    color:
+      black: BLK
+      white: WHT
+      red: RED
+      blue: BLU
+    colorFamilies:
+      black: Black
+      white: White
+    type:
+      balloons: Balloons
+      streamers: Streamers
+      tablecloths: Tablecloths
+    sizes:
+      "12 oz": "12oz"
+      "24 oz": "24oz"
+      "16 oz": "16oz"
+    packageSize:
+      "12 oz": "12oz"
+      "24 oz": "24oz"
+    brands:
+      "PORTICO CLASSIC SEAFOOD": "PORTICO_CLASSIC_SEAFOOD"
+      nike: NIKE
+      adidas: ADIDAS
+      puma: PUMA
+      cab: CAB
+      "bhb/npm": BHB/NPM

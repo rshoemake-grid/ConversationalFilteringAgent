@@ -1,0 +1,32 @@
+services:
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    image: conversational-filtering-agent-frontend:latest
+
+  backend:
+    build:
+      context: backend
+      dockerfile: Dockerfile
+    image: conversational-filtering-agent-backend:latest
+    environment:
+      - APP_SERVE_FRONTEND=false
+      - app.cors.allowed-origins=*
+    # Uncomment for GCP credentials
+    # env_file:
+    #   - backend/.env
+    # volumes:
+    #   - ./gcp-credentials.json:/secrets/key.json:ro
+    # environment:
+    #   - GOOGLE_APPLICATION_CREDENTIALS=/secrets/key.json
+
+  proxy:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
+      - backend

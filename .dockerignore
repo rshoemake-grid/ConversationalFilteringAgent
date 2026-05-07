@@ -1,0 +1,23 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.iml
+
+# Build outputs
+backend/target
+frontend/dist
+node_modules
+
+# Test and dev
+**/__tests__
+**/*.test.*
+**/*.spec.*
+*.log
+
+# Docs (keep README if desired)
+*.md
+!k8s/README.md
