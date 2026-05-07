@@ -248,3 +248,31 @@ This occurs when the gRPC client cannot establish HTTP/2 with GCP, often due to 
 **6. If none work:** The proxy/firewall likely blocks HTTP/2. Options:
 - Run from **Google Cloud Shell** (direct GCP access)
 - Ask IT to enable HTTP/2 for `retail.googleapis.com`
+
+---
+
+## 10. Git remote
+
+Configure `origin` locally when cloning or after changing remotes:
+
+```bash
+git remote add origin https://github.com/rshoemake-grid/ConversationalFilteringAgent.git   # omit if origin already exists
+git push -u origin main
+```
+
+If `origin` already exists:
+
+```bash
+git remote set-url origin https://github.com/rshoemake-grid/ConversationalFilteringAgent.git
+git push -u origin main
+```
+
+<!--
+Backup — previous Conversational Commerce repository (recovery / comparison only):
+
+    https://github.com/rshoemake-grid/ConversationalCommerceAGent.git
+
+To add as a secondary remote without changing origin:
+
+    git remote add backup https://github.com/rshoemake-grid/ConversationalCommerceAGent.git
+-->
