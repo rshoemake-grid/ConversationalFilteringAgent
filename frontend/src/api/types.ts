@@ -73,6 +73,13 @@ export interface ChatRequest {
   previousProductFilter?: string;
   /** Products per page (null = use backend config default) */
   productPageSize?: number;
+  /**
+   * Echo the last VAISR product grid for in-memory refinement (follow-up turns).
+   * Omitted on the first catalog search.
+   */
+  productPool?: ProductDto[];
+  /** When productPool is sent, allow Vertex semantic reranking (default true). */
+  useSemanticReranking?: boolean;
 }
 
 export interface ChatResponse {

@@ -4,7 +4,7 @@
 *.pem
 *-credentials.json
 
-# Local config - copy from application.yml.example
+# Local Spring config (secrets); never commit — copy from application.yml.example
 backend/src/main/resources/application.yml
 
 # Build output

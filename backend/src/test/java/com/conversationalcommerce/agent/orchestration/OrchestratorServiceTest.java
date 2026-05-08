@@ -44,6 +44,8 @@ class OrchestratorServiceTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 null
         );
 
@@ -65,6 +67,8 @@ class OrchestratorServiceTest {
                 "search shoes",
                 "conv-1",
                 "visitor-456",
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -97,6 +101,8 @@ class OrchestratorServiceTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 null
         );
 
@@ -113,6 +119,8 @@ class OrchestratorServiceTest {
                 "hi",
                 null,
                 "session-1",
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -137,6 +145,8 @@ class OrchestratorServiceTest {
                 "session-1",
                 null,
                 5,
+                null,
+                null,
                 null,
                 null,
                 null,

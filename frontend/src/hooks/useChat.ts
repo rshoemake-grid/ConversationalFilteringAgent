@@ -7,6 +7,7 @@ import {
   suggestedAnswerDisplayLabel,
   suggestedAnswerSubmitValue,
 } from '../utils/suggestedAnswerDisplay';
+import { shouldHideSuggestedAnswersFromResponse } from '../utils/suggestionVisibility';
 
 function createUserMessage(text: string, imageUri?: string, imageBase64?: string): Message {
   return {
@@ -28,7 +29,10 @@ function formatProductCount(shown: number, total?: number | null, isApproximate?
   return shown === 1 ? 'Showing 1 product' : `Showing ${shown} products`;
 }
 
-function createAssistantMessage(response: { text?: string; products?: Message['products']; refinedQuery?: string; source?: Message['source']; queryType?: string; suggestedAnswers?: SuggestedAnswer[]; rawResponse?: string | null; productTotalSize?: number; productTotalSizeIsApproximate?: boolean; productNextPageToken?: string | null; productFilter?: string | null; clarifyingQuestion?: string | null }): Message {
+function createAssistantMessage(
+  response: { text?: string; products?: Message['products']; refinedQuery?: string; source?: Message['source']; queryType?: string; suggestedAnswers?: SuggestedAnswer[]; rawResponse?: string | null; productTotalSize?: number; productTotalSizeIsApproximate?: boolean; productNextPageToken?: string | null; productFilter?: string | null; clarifyingQuestion?: string | null },
+  msgOptions?: { suppressSuggestionChips?: boolean }
+): Message {
   let text = (response.text ?? '').trim();
   const products = response.products ?? [];
   const refinedQuery = response.refinedQuery ?? '';
@@ -61,7 +65,10 @@ function createAssistantMessage(response: { text?: string; products?: Message['p
       });
     }
   }
-  if ((!suggestedAnswers || suggestedAnswers.length === 0) && text && text.includes('?')) {
+  if (msgOptions?.suppressSuggestionChips) {
+    suggestedAnswers = [];
+  }
+  if ((!suggestedAnswers || suggestedAnswers.length === 0) && !msgOptions?.suppressSuggestionChips && text && text.includes('?')) {
     suggestedAnswers = [{ displayText: 'Any', value: 'ANY' }];
   }
   suggestedAnswers = normalizeSuggestedAnswerList(suggestedAnswers);
@@ -237,6 +244,10 @@ export function useChat() {
   const [sessionId] = useState(() => `session-${crypto.randomUUID()}`);
   const { speak, stop: stopSpeaking, isSpeaking } = useVoiceOutput();
 
+  /** Accumulated Retail filter from successful turns; sent as previousProductFilter */
+  const sessionProductFilterRef = useRef<string | undefined>(undefined);
+  const sessionFilterSnapshotRef = useRef<string | undefined>(undefined);
+
   const inputRef = useRef(input);
   const conversationIdRef = useRef<string | undefined>(undefined);
   /** Values from suggested answers that were tried and resulted in the same assistant message (no products) */
@@ -260,6 +271,7 @@ export function useChat() {
         productPageToken?: string;
         previousProductFilter?: string;
         appendProductsToMessageId?: string;
+        fromSuggestedAnswer?: boolean;
       }
     ) => {
       if (loading) return;
@@ -273,9 +285,22 @@ export function useChat() {
       }
       setLoading(true);
 
+      sessionFilterSnapshotRef.current = sessionProductFilterRef.current;
+
       const currentConversationId = conversationIdRef.current;
+      const previousProductFilterForRequest =
+        options?.previousProductFilter ?? (options?.productPageToken ? undefined : sessionProductFilterRef.current);
 
       try {
+        const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant' && !m.isError);
+        const productPool =
+          mode === 'convo_commerce' &&
+          !options?.productPageToken &&
+          lastAssistant?.products &&
+          lastAssistant.products.length > 0
+            ? lastAssistant.products
+            : undefined;
+
         const response = await sendChatMessage({
           mode,
           message: hasText ? messageText : '',
@@ -287,13 +312,29 @@ export function useChat() {
           previousSuggestedAnswers: options?.previousSuggestedAnswers,
           previousRefinedQuery: options?.previousRefinedQuery,
           productPageToken: options?.productPageToken,
-          previousProductFilter: options?.previousProductFilter,
+          previousProductFilter: previousProductFilterForRequest,
           productPageSize: productPageSize > 0 ? productPageSize : undefined,
+          productPool,
         });
         if (response.conversationId != null && response.conversationId !== '') {
           conversationIdRef.current = response.conversationId;
           setConversationId(response.conversationId);
         }
+
+        const noProducts = (response.products?.length ?? 0) === 0;
+        const poolRefine = response.productFilter === 'in_memory_pool_refine';
+        if (options?.fromSuggestedAnswer && noProducts) {
+          sessionProductFilterRef.current = sessionFilterSnapshotRef.current;
+        } else if (!noProducts && response.productFilter && !poolRefine) {
+          sessionProductFilterRef.current = response.productFilter;
+        }
+
+        const suppressSuggestionChips = shouldHideSuggestedAnswersFromResponse(
+          response.products,
+          response.productTotalSize,
+          productPageSize
+        );
+
         setMessages((prev) => {
           const lastMsg = prev[prev.length - 1];
           const lastUserContent = lastMsg?.role === 'user' ? lastMsg.content?.trim() : null;
@@ -355,7 +396,7 @@ export function useChat() {
               return merged;
             });
           }
-          return [...prev, createAssistantMessage(filteredResponse)];
+          return [...prev, createAssistantMessage(filteredResponse, { suppressSuggestionChips })];
         });
         setRawResponseHistory((prev) => [...prev, { rawResponse: response.rawResponse ?? null, fallbackResponse: response }]);
         if (voiceOutputEnabled && (response.text?.trim() || response.clarifyingQuestion?.trim())) {
@@ -368,7 +409,7 @@ export function useChat() {
         setLoading(false);
       }
     },
-    [loading, mode, maxSuggestedAnswers, productPageSize, sessionId, voiceOutputEnabled, speak]
+    [loading, mode, maxSuggestedAnswers, productPageSize, sessionId, voiceOutputEnabled, speak, messages]
   );
 
   const handleSend = useCallback(() => {
@@ -427,6 +468,7 @@ export function useChat() {
         previousAssistantText: previousAssistantTextForContext(lastAssistant),
         previousSuggestedAnswers: lastAssistant?.suggestedAnswers,
         previousRefinedQuery: getLastNonEmptyRefinedQuery(messages) ?? lastAssistant?.refinedQuery,
+        fromSuggestedAnswer: true,
       });
     },
     [loading, sendMessage, messages]
@@ -502,6 +544,8 @@ export function useChat() {
     setInput('');
     setPendingImage(null);
     failedSuggestedValuesRef.current = new Set();
+    sessionProductFilterRef.current = undefined;
+    sessionFilterSnapshotRef.current = undefined;
     stopSpeaking();
   }, [stopSpeaking]);
 

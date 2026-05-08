@@ -17,7 +17,9 @@ public record ChatRequest(
         @Schema(description = "Previous refined query (for RETAIL_IRRELEVANT recovery when user says Any/no preference)") String previousRefinedQuery,
         @Schema(description = "Token for load-more (next page of products)") String productPageToken,
         @Schema(description = "Filter from previous product response (for load-more)") String previousProductFilter,
-        @Schema(description = "Products per page (overrides config; null = use config default)") Integer productPageSize
+        @Schema(description = "Products per page (overrides config; null = use config default)") Integer productPageSize,
+        @Schema(description = "Products from the last VAISR search to refine in memory (follow-up turns). Omit on first catalog search.") java.util.List<ProductPoolInput> productPool,
+        @Schema(description = "When productPool is sent, apply Vertex AI semantic reranking when useful (default true). Set false to skip.") Boolean useSemanticReranking
 ) {
     public ChatRequest {
         message = message != null ? message : "";
@@ -25,7 +27,27 @@ public record ChatRequest(
         previousSuggestedAnswers = previousSuggestedAnswers != null ? previousSuggestedAnswers : java.util.List.of();
         productPageToken = productPageToken != null && productPageToken.isBlank() ? null : productPageToken;
         previousProductFilter = previousProductFilter != null && previousProductFilter.isBlank() ? null : previousProductFilter;
+        productPool = productPool != null ? productPool : java.util.List.of();
     }
+
+    @Schema(description = "Product row from a prior response, echoed for in-memory pool refinement")
+    public record ProductPoolInput(
+            String id,
+            String title,
+            String description,
+            String price,
+            String imageUri,
+            String gtin,
+            String productId,
+            java.util.List<String> categories,
+            java.util.List<String> brands,
+            String uri,
+            String availability,
+            java.util.List<String> sizes,
+            java.util.List<String> materials,
+            java.util.Map<String, Object> attributes,
+            Boolean detailsFetched
+    ) {}
 
     @Schema(description = "Suggested answer for context (displayText, value)")
     public record SuggestedAnswerInput(String displayText, String value) {}

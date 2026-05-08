@@ -107,6 +107,7 @@ export function ChatInterface() {
         messages={messages}
         loading={loading}
         maxSuggestedAnswers={maxSuggestedAnswers}
+        productPageSize={productPageSize}
         onRetry={handleRetry}
         onDismissError={handleDismissError}
         onSuggestedAnswer={handleSuggestedAnswer}

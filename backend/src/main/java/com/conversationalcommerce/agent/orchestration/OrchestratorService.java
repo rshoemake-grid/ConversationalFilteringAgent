@@ -24,7 +24,8 @@ public class OrchestratorService {
                                  String imageBase64, Integer maxSuggestedAnswers, String previousAssistantText,
                                  java.util.List<ChatRequest.SuggestedAnswerInput> previousSuggestedAnswers,
                                  String previousRefinedQuery, String productPageToken, String previousProductFilter,
-                                 Integer productPageSize) {
+                                 Integer productPageSize,
+                                 java.util.List<ChatRequest.ProductPoolInput> productPool, Boolean useSemanticReranking) {
         var context = new java.util.HashMap<String, Object>(Map.of("visitorId", sessionId, "sessionId", sessionId));
         context.put("orchestrationMode", mode.name());
         if (imageBase64 != null && !imageBase64.isBlank()) {
@@ -52,6 +53,10 @@ public class OrchestratorService {
         }
         if (productPageSize != null && productPageSize > 0) {
             context.put("productPageSize", productPageSize);
+        }
+        if (productPool != null && !productPool.isEmpty()) {
+            context.put("productPool", productPool);
+            context.put("useSemanticReranking", useSemanticReranking != null ? useSemanticReranking : Boolean.TRUE);
         }
 
         return switch (mode) {

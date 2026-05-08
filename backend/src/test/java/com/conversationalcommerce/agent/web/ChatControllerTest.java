@@ -174,7 +174,8 @@ class ChatControllerTest {
                                      String imageBase64, Integer maxSuggestedAnswers, String previousAssistantText,
                                      List<ChatRequest.SuggestedAnswerInput> previousSuggestedAnswers,
                                      String previousRefinedQuery, String productPageToken, String previousProductFilter,
-                                     Integer productPageSize) {
+                                     Integer productPageSize,
+                                     List<ChatRequest.ProductPoolInput> productPool, Boolean useSemanticReranking) {
             if (throwOnNext) {
                 throw new RuntimeException("Simulated failure");
             }

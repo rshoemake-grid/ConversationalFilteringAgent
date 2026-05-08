@@ -6,6 +6,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ApiKeySanitizerTest {
 
+    /** Generic placeholder — not a real provider key shape (avoids secret-scan false positives). */
+    private static final String SAMPLE_KEY = "exampleSanitizedKey_01noRealSecret";
+
     @Test
     void sanitize_returnsNull_whenInputIsNull() {
         assertThat(ApiKeySanitizer.sanitize(null)).isNull();
@@ -19,35 +22,34 @@ class ApiKeySanitizerTest {
 
     @Test
     void sanitize_returnsKey_whenClean() {
-        String key = "AIzaSyCaQqOtU3fVcQfqbXXmo3o9LEve1reNOug";
-        assertThat(ApiKeySanitizer.sanitize(key)).isEqualTo(key);
+        assertThat(ApiKeySanitizer.sanitize(SAMPLE_KEY)).isEqualTo(SAMPLE_KEY);
     }
 
     @Test
     void sanitize_stripsNewlineAndComment() {
-        String raw = "AIzaSyCaQqOtU3fVcQfqbXXmo3o9LEve1reNOug\n#export GOOGLE_API_KEY=AIzaSyCaQqOtU3fVcQfqbXXmo3o9LEve1reNOug";
-        assertThat(ApiKeySanitizer.sanitize(raw)).isEqualTo("AIzaSyCaQqOtU3fVcQfqbXXmo3o9LEve1reNOug");
+        String raw = SAMPLE_KEY + "\n#export EXAMPLE_KEY=" + SAMPLE_KEY;
+        assertThat(ApiKeySanitizer.sanitize(raw)).isEqualTo(SAMPLE_KEY);
     }
 
     @Test
     void sanitize_stripsTrailingWhitespace() {
-        assertThat(ApiKeySanitizer.sanitize("AIzaSyCaQqOtU3fVcQfqbXXmo3o9LEve1reNOug  ")).isEqualTo("AIzaSyCaQqOtU3fVcQfqbXXmo3o9LEve1reNOug");
+        assertThat(ApiKeySanitizer.sanitize(SAMPLE_KEY + "  ")).isEqualTo(SAMPLE_KEY);
     }
 
     @Test
     void sanitize_stripsCommentOnSameLine() {
-        assertThat(ApiKeySanitizer.sanitize("AIzaSyCaQqOtU3fVcQfqbXXmo3o9LEve1reNOug # comment")).isEqualTo("AIzaSyCaQqOtU3fVcQfqbXXmo3o9LEve1reNOug");
+        assertThat(ApiKeySanitizer.sanitize(SAMPLE_KEY + " # comment")).isEqualTo(SAMPLE_KEY);
     }
 
     @Test
     void sanitize_usesFirstLine_whenMultipleLines() {
-        String raw = "AIzaSyCaQqOtU3fVcQfqbXXmo3o9LEve1reNOug\nsecond line\nthird";
-        assertThat(ApiKeySanitizer.sanitize(raw)).isEqualTo("AIzaSyCaQqOtU3fVcQfqbXXmo3o9LEve1reNOug");
+        String raw = SAMPLE_KEY + "\nsecond line\nthird";
+        assertThat(ApiKeySanitizer.sanitize(raw)).isEqualTo(SAMPLE_KEY);
     }
 
     @Test
     void sanitize_handlesCarriageReturn() {
-        String raw = "AIzaSyCaQqOtU3fVcQfqbXXmo3o9LEve1reNOug\r\n#export";
-        assertThat(ApiKeySanitizer.sanitize(raw)).isEqualTo("AIzaSyCaQqOtU3fVcQfqbXXmo3o9LEve1reNOug");
+        String raw = SAMPLE_KEY + "\r\n#export";
+        assertThat(ApiKeySanitizer.sanitize(raw)).isEqualTo(SAMPLE_KEY);
     }
 }

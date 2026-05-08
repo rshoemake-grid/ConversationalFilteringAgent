@@ -2,11 +2,14 @@ import { memo, useEffect, useRef } from 'react';
 import type { Message, SuggestedAnswer } from '../api/types';
 import { ProductCard } from './ProductCard';
 import { suggestedAnswerDisplayLabel } from '../utils/suggestedAnswerDisplay';
+import { shouldHideSuggestedAnswersForPage } from '../utils/suggestionVisibility';
 
 interface MessageListProps {
   messages: Message[];
   loading?: boolean;
   maxSuggestedAnswers?: number;
+  /** When catalog total is known and fits one page, hide suggested-answer chips */
+  productPageSize?: number;
   onRetry?: (messageText: string, errorId: string, imageBase64?: string) => void;
   onDismissError?: (messageId: string) => void;
   onSuggestedAnswer?: (answer: SuggestedAnswer) => void;
@@ -18,6 +21,7 @@ function MessageListComponent({
   messages,
   loading = false,
   maxSuggestedAnswers,
+  productPageSize = 20,
   onRetry,
   onDismissError,
   onSuggestedAnswer,
@@ -42,6 +46,8 @@ function MessageListComponent({
       )}
       {messages.map((msg, idx) => {
         const hasProducts = Boolean(msg.products && msg.products.length > 0);
+        const hideSuggestions =
+          productPageSize > 0 && shouldHideSuggestedAnswersForPage(msg, productPageSize);
         const showTopRoleRow =
           msg.role === 'user' ||
           msg.isError ||
@@ -155,7 +161,7 @@ function MessageListComponent({
                   <p className="message__clarifying-question" aria-live="polite">
                     {msg.clarifyingQuestion}
                   </p>
-                  {msg.suggestedAnswers && msg.suggestedAnswers.length > 0 && onSuggestedAnswer && (
+                  {msg.suggestedAnswers && msg.suggestedAnswers.length > 0 && onSuggestedAnswer && !hideSuggestions && (
                     <div className="message__suggested-answers message__suggested-answers--after-clarifying">
                       {(maxSuggestedAnswers != null
                         ? msg.suggestedAnswers.slice(0, maxSuggestedAnswers)
@@ -171,6 +177,7 @@ function MessageListComponent({
                         </button>
                       ))}
                       {onGetMoreSuggestions &&
+                        !hideSuggestions &&
                         msg.role === 'assistant' &&
                         !msg.isError &&
                         msg.suggestedAnswers &&
@@ -192,7 +199,7 @@ function MessageListComponent({
               )}
             </div>
           )}
-          {msg.suggestedAnswers && msg.suggestedAnswers.length > 0 && onSuggestedAnswer && !msg.clarifyingQuestion && (
+          {msg.suggestedAnswers && msg.suggestedAnswers.length > 0 && onSuggestedAnswer && !msg.clarifyingQuestion && !hideSuggestions && (
             <div className="message__suggested-answers">
               {(maxSuggestedAnswers != null
                 ? msg.suggestedAnswers.slice(0, maxSuggestedAnswers)
@@ -208,6 +215,7 @@ function MessageListComponent({
                 </button>
               ))}
               {onGetMoreSuggestions &&
+                !hideSuggestions &&
                 msg.role === 'assistant' &&
                 !msg.isError &&
                 msg.suggestedAnswers &&

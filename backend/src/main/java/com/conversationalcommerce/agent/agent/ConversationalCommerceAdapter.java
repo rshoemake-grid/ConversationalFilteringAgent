@@ -3,6 +3,8 @@ package com.conversationalcommerce.agent.agent;
 import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
 import com.conversationalcommerce.agent.gemini.ClarifyingQuestionGenerator;
 import com.conversationalcommerce.agent.orchestration.ContextUtils;
+import com.conversationalcommerce.agent.ranking.VertexAiRankingService;
+import com.conversationalcommerce.agent.web.ChatRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -28,18 +30,24 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
     private final ProductEnrichmentService enrichmentService;
     private final ConversationalCommerceConfig config;
     private final Optional<ClarifyingQuestionGenerator> clarifyingGenerator;
+    private final ProductPoolNarrower productPoolNarrower;
+    private final VertexAiRankingService vertexAiRankingService;
 
     public ConversationalCommerceAdapter(
             ConversationalCommerceClient client,
             RetailSearchClient searchClient,
             ProductEnrichmentService enrichmentService,
             ConversationalCommerceConfig config,
-            Optional<ClarifyingQuestionGenerator> clarifyingGenerator) {
+            Optional<ClarifyingQuestionGenerator> clarifyingGenerator,
+            ProductPoolNarrower productPoolNarrower,
+            VertexAiRankingService vertexAiRankingService) {
         this.client = client;
         this.searchClient = searchClient;
         this.enrichmentService = enrichmentService;
         this.config = config;
         this.clarifyingGenerator = clarifyingGenerator != null ? clarifyingGenerator : Optional.empty();
+        this.productPoolNarrower = productPoolNarrower;
+        this.vertexAiRankingService = vertexAiRankingService;
     }
 
     @Override
@@ -82,6 +90,13 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             } catch (Exception e) {
                 log.warn("Load more failed: {}", e.getMessage());
             }
+        }
+
+        @SuppressWarnings("unchecked")
+        List<ChatRequest.ProductPoolInput> poolInputs =
+                (List<ChatRequest.ProductPoolInput>) context.get("productPool");
+        if (poolInputs != null && !poolInputs.isEmpty()) {
+            return refineInMemoryProductPool(conversationId, message, context, visitorId, poolInputs);
         }
 
         String imageBase64 = (String) context.get("imageBase64");
@@ -139,6 +154,7 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                             ? filter + " AND " + storageTypeFilter
                             : storageTypeFilter;
                 }
+                filter = combineRetailFilters(sanitizeSessionProductFilter((String) context.get("previousProductFilter")), filter);
                 productFilterUsed = filter;
                 String pageToken = (productPageToken != null && !productPageToken.isBlank()) ? productPageToken : null;
                 searchResult = searchClient.searchWithPagination(
@@ -197,6 +213,9 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                         suggestedAnswers = List.of();
                         responseSource = "app";
                         usedAutoRunSingleSuggestion = true;
+                        if (autoResult.filterUsed() != null && !autoResult.filterUsed().isBlank()) {
+                            productFilterUsed = autoResult.filterUsed();
+                        }
                     }
                 }
             }
@@ -235,7 +254,9 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                             : expandStorageTypeValue(soleValue);
                     if (filterValue != null) {
                         try {
-                            String stFilter = buildStorageTypeFilter(filterValue);
+                            String stFilter = combineRetailFilters(
+                                    sanitizeSessionProductFilter((String) context.get("previousProductFilter")),
+                                    buildStorageTypeFilter(filterValue));
                             List<AgentResponse.ProductResult> autoProducts = searchClient.search(
                                     config.placement(), config.branch(), prevRefined.trim(), visitorId, stFilter);
                             autoProducts = enrichmentService.enrich(autoProducts);
@@ -247,6 +268,7 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                             } else {
                                 text = "No products found.";
                             }
+                            productFilterUsed = stFilter;
                             suggestedAnswers = List.of();
                             responseSource = "app";
                             usedPreviousAgentFallback = true;
@@ -381,6 +403,10 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                     ? "Showing 1 of " + prefix + totalSize + " product"
                     : "Showing " + productsToReturn.size() + " of " + prefix + totalSize + " products";
         }
+        long rawCatalogTotal = searchResult != null ? searchResult.totalSize() : -1;
+        if (shouldSuppressSuggestedAnswersForSinglePage(productsToReturn, rawCatalogTotal, productPageSizeOverride)) {
+            suggestedAnswers = List.of();
+        }
         return AgentResponse.builder()
                 .text(text)
                 .conversationId(result.conversationId())
@@ -395,6 +421,97 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                 .productNextPageToken(nextPageToken)
                 .productFilter(productFilterUsed)
                 .clarifyingQuestion(clarifyingQuestion)
+                .build();
+    }
+
+    /**
+     * Follow-up path: conversational filtering + in-memory whittling of the product pool from the prior VAISR search;
+     * optional Vertex AI semantic reranking does not hit the full Retail catalog for listing.
+     */
+    private AgentResponse refineInMemoryProductPool(
+            String conversationId,
+            String message,
+            Map<String, Object> context,
+            String visitorId,
+            List<ChatRequest.ProductPoolInput> poolInputs) {
+
+        List<AgentResponse.ProductResult> pool = ProductPoolMapper.toProductResults(poolInputs);
+        if (pool.isEmpty()) {
+            return AgentResponse.builder()
+                    .text("No products were provided in the pool to refine.")
+                    .conversationId(conversationId != null ? conversationId : "")
+                    .products(List.of())
+                    .queryType("SIMPLE_PRODUCT_SEARCH")
+                    .source("app")
+                    .productTotalSize(0)
+                    .build();
+        }
+
+        String imageBase64 = (String) context.get("imageBase64");
+        String userInput = (message != null && !message.isBlank()) ? message.trim()
+                : (imageBase64 != null ? "Find products similar to this image" : "");
+        final String query = expandShortAttributeValue(userInput, context);
+
+        var request = new ConversationalCommerceClient.ConversationalCommerceRequest(
+                config.placement(),
+                config.branch(),
+                query,
+                visitorId,
+                conversationId != null ? conversationId : "",
+                imageBase64
+        );
+
+        var result = client.search(request);
+
+        List<AgentResponse.ProductResult> narrowed = productPoolNarrower.narrow(
+                pool,
+                userInput,
+                result.refinedQuery(),
+                result.suggestedAnswers());
+
+        Boolean useRerank = (Boolean) context.get("useSemanticReranking");
+        boolean rerankAllowed = !Boolean.FALSE.equals(useRerank);
+        String rankQuery = (result.refinedQuery() != null && !result.refinedQuery().isBlank())
+                ? result.refinedQuery().trim()
+                : userInput;
+
+        if (rerankAllowed && vertexAiRankingService != null && narrowed.size() >= 2 && rankQuery != null && !rankQuery.isBlank()) {
+            narrowed = vertexAiRankingService.rank(rankQuery, narrowed);
+        }
+
+        String refined = result.refinedQuery();
+        String agentText = result.text() != null ? result.text() : "";
+        String countPart = narrowed.isEmpty()
+                ? "No products in your current selection matched that request."
+                : (narrowed.size() == 1
+                        ? "Showing 1 product from your selection."
+                        : "Showing " + narrowed.size() + " products from your selection.");
+        String text = (!agentText.isBlank() && !agentText.startsWith("Searching for:"))
+                ? countPart + "\n\n" + agentText
+                : (narrowed.isEmpty() && !agentText.isBlank() ? agentText : countPart);
+
+        List<ConversationalCommerceClient.SuggestedAnswer> suggestedAnswers =
+                applyStorageTypeDisplayMapping(
+                        result.suggestedAnswers() != null ? result.suggestedAnswers() : List.of());
+
+        Integer poolPageOverride = context.get("productPageSize") instanceof Number n ? n.intValue() : null;
+        if (!narrowed.isEmpty() && narrowed.size() <= getEffectivePageSize(poolPageOverride)) {
+            suggestedAnswers = List.of();
+        }
+
+        return AgentResponse.builder()
+                .text(text)
+                .conversationId(result.conversationId())
+                .refinedQuery(refined)
+                .products(narrowed)
+                .queryType(result.queryType())
+                .source(result.source() != null ? result.source() : "agent")
+                .rawResponse(result.rawResponse())
+                .suggestedAnswers(suggestedAnswers)
+                .productTotalSize(narrowed.size())
+                .productTotalSizeIsApproximate(false)
+                .productNextPageToken(null)
+                .productFilter("in_memory_pool_refine")
                 .build();
     }
 
@@ -539,35 +656,38 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
     private AutoRunResult tryAutoRunSingleSuggestion(String baseQuery, String value, List<ConversationalCommerceClient.SuggestedAnswer> suggestedAnswers,
                                                      Map<String, Object> context, String visitorId) {
         try {
+            String session = sanitizeSessionProductFilter((String) context.get("previousProductFilter"));
             String normalized = (value != null ? value.trim().toUpperCase() : "");
             if (STORAGE_TYPE_VALUES.contains(normalized) || (value != null && STORAGE_TYPE_VALUES.contains(value.trim()))) {
                 String filterValue = ("S".equals(normalized) || "R".equals(normalized) || "D".equals(normalized)) ? value.trim() : expandStorageTypeValue(value);
                 if (filterValue == null) filterValue = value;
-                String filter = buildStorageTypeFilter(filterValue);
-                var prods = searchClient.search(config.placement(), config.branch(), baseQuery, visitorId, filter);
+                String newFilter = buildStorageTypeFilter(filterValue);
+                String merged = combineRetailFilters(session, newFilter);
+                var prods = searchClient.search(config.placement(), config.branch(), baseQuery, visitorId, merged);
                 prods = enrichmentService.enrich(prods);
                 String msg = prods.isEmpty() ? "No products found." : (prods.size() == 1 ? "I found 1 product matching your request." : "I found " + prods.size() + " products matching your request.");
-                return new AutoRunResult(prods, msg);
+                return new AutoRunResult(prods, msg, merged);
             }
             String brandFilter = buildBrandFilterWhenApplicable(value, suggestedAnswers, context);
             if (brandFilter != null) {
-                var prods = searchClient.search(config.placement(), config.branch(), baseQuery, visitorId, brandFilter);
+                String merged = combineRetailFilters(session, brandFilter);
+                var prods = searchClient.search(config.placement(), config.branch(), baseQuery, visitorId, merged);
                 prods = enrichmentService.enrich(prods);
                 String msg = prods.isEmpty() ? "No products found." : (prods.size() == 1 ? "I found 1 product matching your request." : "I found " + prods.size() + " products matching your request.");
-                return new AutoRunResult(prods, msg);
+                return new AutoRunResult(prods, msg, merged);
             }
             String query = (baseQuery + " " + value).trim();
-            var prods = searchClient.search(config.placement(), config.branch(), query, visitorId, null);
+            var prods = searchClient.search(config.placement(), config.branch(), query, visitorId, session);
             prods = enrichmentService.enrich(prods);
             String msg = prods.isEmpty() ? "No products found." : (prods.size() == 1 ? "I found 1 product matching your request." : "I found " + prods.size() + " products matching your request.");
-            return new AutoRunResult(prods, msg);
+            return new AutoRunResult(prods, msg, session);
         } catch (Exception e) {
             log.warn("Auto-run single suggestion failed: {}", e.getMessage());
             return null;
         }
     }
 
-    private record AutoRunResult(List<AgentResponse.ProductResult> products, String text) {}
+    private record AutoRunResult(List<AgentResponse.ProductResult> products, String text, String filterUsed) {}
 
     /** Expand short storage code (S, R, D) or display text to canonical value for filters. D/R/S are suggested-answer values sent to GCP as-is. */
     private String expandStorageTypeValue(String value) {
@@ -613,5 +733,31 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             return "brands: ANY(\"" + escaped + "\")";
         }
         return null;
+    }
+
+    /** Merge session-scoped Retail filter with the filter for this turn (AND). */
+    static String combineRetailFilters(String previous, String next) {
+        String a = previous != null ? previous.trim() : "";
+        String b = next != null ? next.trim() : "";
+        if (a.isEmpty()) return b.isEmpty() ? null : b;
+        if (b.isEmpty()) return a;
+        return a + " AND " + b;
+    }
+
+    /** Treat in-memory pool marker as absent for Retail filter merge. */
+    static String sanitizeSessionProductFilter(String filter) {
+        if (filter == null || filter.isBlank()) return null;
+        if ("in_memory_pool_refine".equals(filter.trim())) return null;
+        return filter.trim();
+    }
+
+    /** Hide follow-up chips when the catalog reports a total that fits in one page (and total is known). */
+    private boolean shouldSuppressSuggestedAnswersForSinglePage(
+            List<AgentResponse.ProductResult> products,
+            long catalogTotalSize,
+            Integer productPageSizeOverride) {
+        if (products == null || products.isEmpty() || catalogTotalSize < 0) return false;
+        int effPage = getEffectivePageSize(productPageSizeOverride);
+        return catalogTotalSize <= effPage;
     }
 }

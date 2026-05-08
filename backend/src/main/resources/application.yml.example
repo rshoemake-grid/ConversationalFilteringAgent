@@ -3,7 +3,7 @@ server:
 
 # Environment variables (reference / defaults). Prefer OS env or secrets in production.
 env:
-  GOOGLE_API_KEY: ${GOOGLE_API_KEY:}
+  GOOGLE_API_KEY: "${GOOGLE_API_KEY:enter api key here}"
 
 # CORS - use specific origins in production (e.g. https://your-frontend.com)
 app:
@@ -15,7 +15,7 @@ app:
   gemini:
     # ADK / Gemini (Approach B), clarifying-question generator, GET /api/models. Keys from Google AI Studio.
     # Set env.GOOGLE_API_KEY above, or export GOOGLE_API_KEY (application.yml is gitignored when copied).
-    api-key: ${env.GOOGLE_API_KEY:${GOOGLE_API_KEY:}}
+    api-key: "${env.GOOGLE_API_KEY:${GOOGLE_API_KEY:enter api key here}}"
     model: ${GEMINI_MODEL:gemini-flash-latest}
 
 # REST API docs (default: /v3/api-docs, /swagger-ui/index.html)

@@ -35,7 +35,9 @@ public class ChatController {
                 request.previousRefinedQuery(),
                 request.productPageToken(),
                 request.previousProductFilter(),
-                request.productPageSize()
+                request.productPageSize(),
+                request.productPool(),
+                request.useSemanticReranking()
         );
         return ResponseEntity.ok(ChatResponse.from(response));
     }
