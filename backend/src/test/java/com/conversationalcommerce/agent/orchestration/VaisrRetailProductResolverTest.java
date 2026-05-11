@@ -86,23 +86,33 @@ class VaisrRetailProductResolverTest {
     }
 
     @Test
-    void storageRecoveryWithNoProductsDoesNotDuplicateNoProductsMessage() {
+    void storageRecoveryWithNoProducts_reasksWithRemainingSuggestedAnswers() {
         when(searchClient.searchWithPagination(
-                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"S\")"), eq(null), eq(null)))
+                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"D\")"), eq(null), eq(null)))
                 .thenReturn(SearchResult.of(List.of(), null, 0));
 
         var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(
-                "What type of stock?", "c-gcp", "rice", "SIMPLE_PRODUCT_SEARCH", "agent", "{}", List.of());
+                "No products found.", "c-gcp", "rice", "INTENT_REFINEMENT", "agent", "{}", List.of());
         var ctx = Map.<String, Object>of(
                 "visitorId", "v1",
                 "previousRefinedQuery", "rice",
+                "previousAssistantText", "What type of stock do you prefer?",
                 "previousSuggestedAnswers",
-                List.of(Map.of("displayText", "Ambient", "value", "S")));
+                List.of(
+                        Map.of("displayText", "Ambient", "value", "S"),
+                        Map.of("displayText", "Refrigerated", "value", "R"),
+                        Map.of("displayText", "Dry storage", "value", "D")));
 
-        VaisrRetailProductResolver.Augmentation aug = resolver.resolve(vaisr, "Ambient", ctx);
+        VaisrRetailProductResolver.Augmentation aug = resolver.resolve(vaisr, "D", ctx);
 
         assertThat(aug.products()).isEmpty();
-        assertThat(aug.text()).isEqualTo("No products found.");
+        assertThat(aug.text()).contains("What type of stock do you prefer?");
+        assertThat(aug.text()).contains("No products found for that option.");
+        assertThat(aug.suggestedAnswersOverride()).isNotNull();
+        assertThat(aug.suggestedAnswersOverride()).hasSize(2);
+        assertThat(aug.suggestedAnswersOverride())
+                .extracting(ConversationalCommerceClient.SuggestedAnswer::value)
+                .containsExactlyInAnyOrder("S", "R");
     }
 
     @Test

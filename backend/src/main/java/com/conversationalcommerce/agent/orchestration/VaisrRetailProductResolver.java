@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -72,7 +73,9 @@ public class VaisrRetailProductResolver {
             boolean productTotalSizeIsApproximate,
             String productNextPageToken,
             String clarifyingQuestion,
-            String responseSource) {
+            String responseSource,
+            /** When non-null, replaces tool suggested answers (e.g. re-ask after a failed storage chip). */
+            List<ConversationalCommerceClient.SuggestedAnswer> suggestedAnswersOverride) {
     }
 
     public Augmentation resolve(
@@ -149,7 +152,80 @@ public class VaisrRetailProductResolver {
                 text = n == 1
                         ? "I found 1 product matching your request."
                         : "I found " + n + " products matching your request.";
-            } else {
+            } else if (!usedStorageTypeRecovery) {
+                text = "No products found.";
+            }
+        }
+
+        List<ConversationalCommerceClient.SuggestedAnswer> suggestedAnswersOverride = null;
+        if (usedStorageTypeRecovery && products.isEmpty()) {
+            String prevText = (String) context.get("previousAssistantText");
+            @SuppressWarnings("unchecked")
+            var prevList = (List<Map<String, String>>) context.get("previousSuggestedAnswers");
+            List<ConversationalCommerceClient.SuggestedAnswer> remaining = prevList != null && !prevList.isEmpty()
+                    ? prevList.stream()
+                            .filter(m -> !originalUserInput.trim().equals(m.getOrDefault("value", "").trim())
+                                    && !originalUserInput.trim().equalsIgnoreCase(m.getOrDefault("displayText", "").trim()))
+                            .map(m -> new ConversationalCommerceClient.SuggestedAnswer(
+                                    m.getOrDefault("displayText", m.getOrDefault("value", "")),
+                                    m.getOrDefault("value", "")))
+                            .toList()
+                    : (result.suggestedAnswers() != null
+                            ? result.suggestedAnswers().stream()
+                                    .filter(sa -> !originalUserInput.trim().equals(
+                                            sa.value() != null ? sa.value().trim() : ""))
+                                    .toList()
+                            : List.of());
+
+            boolean usedStorageReaskFallback = false;
+            if (remaining.size() == 1 && prevText != null && !prevText.isBlank()) {
+                String prevRefined = (String) context.get("previousRefinedQuery");
+                if (prevRefined != null && !prevRefined.isBlank()) {
+                    ConversationalCommerceClient.SuggestedAnswer sole = remaining.get(0);
+                    String soleValue = sole.value();
+                    String filterValue = StockTypeRetailFilter.attributeValueForFilter(soleValue, config);
+                    if (filterValue == null && soleValue != null) {
+                        filterValue = soleValue.trim();
+                    }
+                    if (filterValue != null) {
+                        try {
+                            String stFilter = combineRetailFilters(
+                                    sanitizeSessionProductFilter((String) context.get("previousProductFilter")),
+                                    buildStorageTypeFilter(filterValue));
+                            List<AgentResponse.ProductResult> autoProducts = searchClient.search(
+                                    config.placement(), config.branch(), prevRefined.trim(), visitorId, stFilter);
+                            autoProducts = enrichmentService.enrich(autoProducts);
+                            products = autoProducts;
+                            productFilterUsed = stFilter;
+                            if (!autoProducts.isEmpty()) {
+                                int n = autoProducts.size();
+                                text = n == 1
+                                        ? "I found 1 product matching your request."
+                                        : "I found " + n + " products matching your request.";
+                                searchResult = SearchResult.of(autoProducts, null, Math.max((long) n, 1L));
+                            } else {
+                                text = "No products found.";
+                            }
+                            suggestedAnswersOverride = List.of();
+                            usedStorageReaskFallback = true;
+                        } catch (Exception e) {
+                            log.warn("Auto-run last storage option failed: {}", e.getMessage());
+                        }
+                    }
+                }
+            }
+
+            if (!usedStorageReaskFallback && prevText != null && !prevText.isBlank()) {
+                boolean alreadyHasPrefix = prevText.contains("No products found for that option.");
+                text = !alreadyHasPrefix
+                        ? "No products found for that option.\n\n" + prevText
+                        : prevText;
+                suggestedAnswersOverride = List.copyOf(applyStorageTypeDisplayMapping(remaining));
+                usedStorageReaskFallback = true;
+            } else if (!usedStorageReaskFallback && !remaining.isEmpty()) {
+                text = "No products found for that option.\n\nWhat would you like to try next?";
+                suggestedAnswersOverride = List.copyOf(applyStorageTypeDisplayMapping(remaining));
+            } else if (!usedStorageReaskFallback) {
                 text = "No products found.";
             }
         }
@@ -244,7 +320,8 @@ public class VaisrRetailProductResolver {
                 totalSizeIsApproximate,
                 nextPageToken,
                 clarifyingQuestion,
-                "app"
+                "app",
+                suggestedAnswersOverride
         );
     }
 
@@ -381,6 +458,41 @@ public class VaisrRetailProductResolver {
         String attr = config.stockTypeFilterAttribute();
         String escaped = value.trim().replace("\\", "\\\\").replace("\"", "\\\"");
         return "attributes." + attr + ": ANY(\"" + escaped + "\")";
+    }
+
+    private static final Map<String, String> STORAGE_DISPLAY_DEFAULTS = Map.of(
+            "S", "Ambient",
+            "R", "Refrigerated",
+            "D", "Dry storage",
+            "F", "Frozen",
+            "C", "Refrigerated",
+            "N", "Non-refrigerated");
+
+    private List<ConversationalCommerceClient.SuggestedAnswer> applyStorageTypeDisplayMapping(
+            List<ConversationalCommerceClient.SuggestedAnswer> list) {
+        if (list == null || list.isEmpty()) {
+            return List.of();
+        }
+        var storageMap = config.getAttributeDisplayMapping() != null
+                ? config.getAttributeDisplayMapping().get("storageType")
+                : null;
+        List<ConversationalCommerceClient.SuggestedAnswer> out = new ArrayList<>(list.size());
+        for (ConversationalCommerceClient.SuggestedAnswer sa : list) {
+            String v = sa.value();
+            if (v == null) {
+                out.add(sa);
+                continue;
+            }
+            String display = (storageMap != null && storageMap.containsKey(v))
+                    ? storageMap.get(v)
+                    : STORAGE_DISPLAY_DEFAULTS.get(v);
+            if (display == null || display.equals(sa.displayText())) {
+                out.add(sa);
+            } else {
+                out.add(new ConversationalCommerceClient.SuggestedAnswer(display, v));
+            }
+        }
+        return out;
     }
 
     private String buildBrandFilterWhenApplicable(

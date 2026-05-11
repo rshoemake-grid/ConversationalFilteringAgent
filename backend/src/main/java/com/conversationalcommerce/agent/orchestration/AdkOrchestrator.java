@@ -182,10 +182,13 @@ public class AdkOrchestrator implements ChatOrchestrator {
                     .productTotalSizeIsApproximate(aug.productTotalSizeIsApproximate())
                     .productNextPageToken(aug.productNextPageToken())
                     .clarifyingQuestion(aug.clarifyingQuestion());
-            if (commerceConfig != null && shouldDropStorageSuggestionsAfterSmallResult(aug, commerceConfig)) {
+            if (commerceConfig != null && shouldDropEchoedStorageSuggestionsWithProducts(aug)) {
                 List<ConversationalCommerceClient.SuggestedAnswer> stripped =
                         ClarifyingFollowUpPolicy.withoutStorageSuggestions(List.copyOf(lastSearchSuggestions));
                 responseBuilder.suggestedAnswers(stripped);
+            }
+            if (aug.suggestedAnswersOverride() != null) {
+                responseBuilder.suggestedAnswers(List.copyOf(aug.suggestedAnswersOverride()));
             }
         }
 
@@ -207,17 +210,12 @@ public class AdkOrchestrator implements ChatOrchestrator {
         return failureDetail != null && !failureDetail.isBlank() && lastSuccessfulTool == null;
     }
 
-    private static boolean shouldDropStorageSuggestionsAfterSmallResult(
-            VaisrRetailProductResolver.Augmentation aug, ConversationalCommerceConfig config) {
-        if (aug.products() == null || aug.products().isEmpty()) {
-            return false;
-        }
-        if (aug.clarifyingQuestion() != null && !aug.clarifyingQuestion().isBlank()) {
-            return false;
-        }
-        int count = ClarifyingFollowUpPolicy.effectiveProductCountForClarifying(
-                aug.products().size(), aug.productTotalSize());
-        return !ClarifyingFollowUpPolicy.shouldOfferClarifyingFollowUp(count, config.productCountThreshold());
+    /**
+     * VAISR often returns storage facet chips alongside product results; strip them whenever we have a non-empty
+     * product list so generic clarifying follow-ups do not repeat Ambient/Refrigerated/Dry storage.
+     */
+    private static boolean shouldDropEchoedStorageSuggestionsWithProducts(VaisrRetailProductResolver.Augmentation aug) {
+        return aug.products() != null && !aug.products().isEmpty();
     }
 
     static String mergeAdkTextWithSearchFailure(

@@ -221,8 +221,8 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             }
         }
 
-        // When SIMPLE_PRODUCT_SEARCH or storage-type recovery, no products: show previous question with suggested answers minus the one tried
-        boolean simpleProductSearchNoProducts = "SIMPLE_PRODUCT_SEARCH".equals(result.queryType())
+        // When SIMPLE_PRODUCT_SEARCH / INTENT_REFINEMENT or storage-type recovery, no products: show previous question with suggested answers minus the one tried
+        boolean simpleProductSearchNoProducts = ("SIMPLE_PRODUCT_SEARCH".equals(result.queryType()) || "INTENT_REFINEMENT".equals(result.queryType()))
                 && products.isEmpty()
                 && (text == null || text.isEmpty() || text.startsWith("Searching for:"));
         boolean storageTypeRecoveryNoProducts = usedStorageTypeRecovery && products.isEmpty();
@@ -381,12 +381,10 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             }
         }
 
-        if (!productsToReturn.isEmpty()
-                && !ClarifyingFollowUpPolicy.shouldOfferClarifyingFollowUp(clarifyingCount, productCountThreshold)
-                && clarifyingQuestion == null
-                && !usedPreviousAgentFallback
-                && !usedNoPreferenceRecovery
-                && !usedStorageTypeRecovery) {
+        // GCP often echoes stock/storage facet chips on the same turn as product hits (including after the user
+        // picked a storage type). Strip those whenever we return products; empty-result re-ask paths above keep
+        // storage suggestions. Non-storage chips (e.g. brands) are preserved.
+        if (productsToReturn != null && !productsToReturn.isEmpty()) {
             suggestedAnswers = ClarifyingFollowUpPolicy.withoutStorageSuggestions(suggestedAnswers);
         }
 
@@ -394,11 +392,6 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             suggestedAnswers = List.of(new ConversationalCommerceClient.SuggestedAnswer("Any", "ANY"));
         }
         suggestedAnswers = applyStorageTypeDisplayMapping(suggestedAnswers);
-        // GCP may echo the same storage chips (S/R/D) in the conversational response even after the user
-        // picked one; we already applied that filter for product search — drop redundant storage suggestions.
-        if (usedStorageTypeRecovery && productsToReturn != null && !productsToReturn.isEmpty()) {
-            suggestedAnswers = removeStorageTypeSuggestions(suggestedAnswers);
-        }
         // Ensure no-preference/storage-type recovery always returns products when we have them
         if ((usedNoPreferenceRecovery || usedStorageTypeRecovery) && !products.isEmpty()) {
             productsToReturn = products;
@@ -645,18 +638,6 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             "F", "Frozen", "C", "Refrigerated",
             "N", "Non-refrigerated"
     );
-
-    /** Remove suggestions whose value is a stock/storage code — redundant after storage-type recovery returned products. */
-    private static List<ConversationalCommerceClient.SuggestedAnswer> removeStorageTypeSuggestions(
-            List<ConversationalCommerceClient.SuggestedAnswer> list) {
-        if (list == null || list.isEmpty()) return list;
-        return list.stream().filter(sa -> !isStorageSuggestionValue(sa.value())).toList();
-    }
-
-    private static boolean isStorageSuggestionValue(String value) {
-        if (value == null || value.isBlank()) return false;
-        return STORAGE_TYPE_VALUES.contains(value.trim().toUpperCase());
-    }
 
     /** Apply storageType display mapping so S/R/D show as Ambient/Refrigerated/Dry storage. */
     private List<ConversationalCommerceClient.SuggestedAnswer> applyStorageTypeDisplayMapping(List<ConversationalCommerceClient.SuggestedAnswer> list) {

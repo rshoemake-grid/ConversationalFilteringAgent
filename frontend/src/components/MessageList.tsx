@@ -199,7 +199,14 @@ function MessageListComponent({
               )}
             </div>
           )}
-          {msg.suggestedAnswers && msg.suggestedAnswers.length > 0 && onSuggestedAnswer && !msg.clarifyingQuestion && !hideSuggestions && (
+          {/* Suggested chips below the bubble only when there is no product grid; with products, follow-up
+              options belong in clarifyingQuestion (rendered above) — otherwise GCP can echo stale facet chips. */}
+          {msg.suggestedAnswers &&
+            msg.suggestedAnswers.length > 0 &&
+            onSuggestedAnswer &&
+            !msg.clarifyingQuestion &&
+            !hideSuggestions &&
+            !hasProducts && (
             <div className="message__suggested-answers">
               {(maxSuggestedAnswers != null
                 ? msg.suggestedAnswers.slice(0, maxSuggestedAnswers)

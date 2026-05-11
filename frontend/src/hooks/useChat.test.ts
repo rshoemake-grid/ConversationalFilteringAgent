@@ -227,6 +227,31 @@ describe('useChat', () => {
     ])
   })
 
+  it('does not extract suggestedAnswers from rawResponse when backend sends an empty list (explicit strip)', async () => {
+    const rawWithSuggested = JSON.stringify({
+      conversationalFilteringResult: {
+        suggestedAnswers: [
+          { productAttributeValue: { value: 'S' } },
+          { productAttributeValue: { value: 'R' } },
+        ],
+      },
+    });
+    vi.mocked(chatApi.sendChatMessage).mockResolvedValue({
+      text: 'Showing 1 of 10 products',
+      conversationId: 'c1',
+      products: [{ id: 'p1', title: 'Rice', description: '', price: '$1' }],
+      suggestedAnswers: [],
+      rawResponse: rawWithSuggested,
+    });
+
+    const { result } = renderHook(() => useChat())
+    act(() => result.current.setInput('rice'))
+    await act(async () => result.current.handleSend())
+
+    const assistantMsg = result.current.messages[1]
+    expect(assistantMsg.suggestedAnswers ?? []).toHaveLength(0)
+  })
+
   it('applies title case to brand-like codes when extracting from rawResponse', async () => {
     const rawWithBrands = JSON.stringify({
       conversationalFilteringResult: {

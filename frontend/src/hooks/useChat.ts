@@ -444,8 +444,11 @@ export function useChat() {
           const filterExcluded = (list: SuggestedAnswer[]) =>
             list.filter((sa) => !isSuggestedAnswerExcluded(sa, failedSet));
 
-          let suggestedAnswers = response.suggestedAnswers?.length ? filterExcluded(response.suggestedAnswers) : undefined;
-          if (!suggestedAnswers?.length && response.rawResponse) {
+          let suggestedAnswers: SuggestedAnswer[] | undefined;
+          if (Array.isArray(response.suggestedAnswers)) {
+            suggestedAnswers =
+              response.suggestedAnswers.length > 0 ? filterExcluded(response.suggestedAnswers) : [];
+          } else if (response.rawResponse) {
             const extracted = extractSuggestedAnswersFromRaw(response.rawResponse);
             if (extracted.length > 0) {
               const asSuggested = extracted.map((v) => {

@@ -300,7 +300,7 @@ describe('MessageList', () => {
     expect(onSuggestedAnswer).toHaveBeenCalledWith(running)
   })
 
-  it('renders storage codes as readable labels and places suggestions after the product grid when both exist', () => {
+  it('does not show suggested-answer chips under the product grid when only products are returned (no clarifyingQuestion)', () => {
     render(
       <MessageList
         messages={[
@@ -318,9 +318,9 @@ describe('MessageList', () => {
         onSuggestedAnswer={() => {}}
       />
     )
-    const productsHeading = screen.getByText('Products')
-    const ambient = screen.getByRole('button', { name: 'Ambient' })
-    expect(productsHeading.compareDocumentPosition(ambient) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByText('Products')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ambient' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Refrigerated' })).not.toBeInTheDocument()
   })
 
   it('slices suggested answers when maxSuggestedAnswers is set', () => {
