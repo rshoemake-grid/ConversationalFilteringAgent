@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useChat } from './useChat'
+import { useChat, ORCHESTRATION_MODE_STORAGE_KEY } from './useChat'
 import * as chatApi from '../api/chatApi'
 
 vi.mock('../api/chatApi', () => ({
@@ -21,6 +21,26 @@ describe('useChat', () => {
     vi.mocked(chatApi.sendChatMessage).mockReset()
     mockSpeak.mockClear()
     vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid' })
+  })
+
+  it('persists orchestration mode to localStorage when setMode is called', () => {
+    const { result } = renderHook(() => useChat())
+    act(() => {
+      result.current.setMode('adk_orchestrator')
+    })
+    expect(localStorage.getItem(ORCHESTRATION_MODE_STORAGE_KEY)).toBe('adk_orchestrator')
+  })
+
+  it('initializes mode from localStorage when valid', () => {
+    localStorage.setItem(ORCHESTRATION_MODE_STORAGE_KEY, 'adk_orchestrator')
+    const { result } = renderHook(() => useChat())
+    expect(result.current.mode).toBe('adk_orchestrator')
+  })
+
+  it('falls back to convo_commerce when localStorage value is invalid', () => {
+    localStorage.setItem(ORCHESTRATION_MODE_STORAGE_KEY, 'bogus')
+    const { result } = renderHook(() => useChat())
+    expect(result.current.mode).toBe('convo_commerce')
   })
 
   it('returns initial state', () => {

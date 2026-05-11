@@ -29,6 +29,40 @@ class GeminiApiKeyResolverTest {
     }
 
     @Test
+    void prefers_camelCase_app_gemini_apiKey() {
+        var env = new MockEnvironment()
+                .withProperty("app.gemini.apiKey", "from-camel")
+                .withProperty("GOOGLE_API_KEY", "from-env");
+        assertThat(GeminiApiKeyResolver.resolve(env)).isEqualTo("from-camel");
+    }
+
+    @Test
+    void falls_back_to_GEMINI_API_KEY() {
+        var env = new MockEnvironment().withProperty("GEMINI_API_KEY", "from-gemini-env");
+        assertThat(GeminiApiKeyResolver.resolve(env)).isEqualTo("from-gemini-env");
+    }
+
+    @Test
+    void skips_placeholder_and_uses_next_source() {
+        var env = new MockEnvironment()
+                .withProperty("app.gemini.api-key", "enter api key here")
+                .withProperty("GOOGLE_API_KEY", "real-key");
+        assertThat(GeminiApiKeyResolver.resolve(env)).isEqualTo("real-key");
+    }
+
+    @Test
+    void hasUsableApiKey_falseWhenSanitizedEmpty() {
+        var env = new MockEnvironment().withProperty("app.gemini.api-key", "#only-comment");
+        assertThat(GeminiApiKeyResolver.hasUsableApiKey(env)).isFalse();
+    }
+
+    @Test
+    void hasUsableApiKey_trueWhenClean() {
+        var env = new MockEnvironment().withProperty("GOOGLE_API_KEY", "k");
+        assertThat(GeminiApiKeyResolver.hasUsableApiKey(env)).isTrue();
+    }
+
+    @Test
     void returns_null_when_missing() {
         assertThat(GeminiApiKeyResolver.resolve(new MockEnvironment())).isNull();
         assertThat(GeminiApiKeyResolver.isPresent(new MockEnvironment())).isFalse();

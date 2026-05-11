@@ -3,15 +3,14 @@ package com.conversationalcommerce.agent.web;
 import com.conversationalcommerce.agent.gemini.GeminiModelsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.env.Environment;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
 import java.util.Optional;
 
-import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -48,7 +47,7 @@ class ModelsControllerTest {
 
     private static class StubGeminiModelsService extends GeminiModelsService {
         StubGeminiModelsService() {
-            super(mock(Environment.class));
+            super(new MockEnvironment(), null);
         }
 
         @Override

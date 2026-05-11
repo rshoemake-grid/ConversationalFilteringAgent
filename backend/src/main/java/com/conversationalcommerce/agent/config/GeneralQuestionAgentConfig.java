@@ -6,9 +6,12 @@ import com.google.adk.events.Event;
 import com.google.adk.models.Gemini;
 import com.google.adk.runner.InMemoryRunner;
 import com.google.adk.sessions.Session;
+import com.google.genai.Client;
 import com.google.genai.types.Content;
 import com.google.genai.types.Part;
 import io.reactivex.rxjava3.core.Flowable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,9 +26,11 @@ import java.util.List;
 @Configuration
 public class GeneralQuestionAgentConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(GeneralQuestionAgentConfig.class);
+
     private static final String APP_NAME = "general_question_specialist";
 
-    @Value("${app.gemini.model:gemini-flash-latest}")
+    @Value("${app.gemini.model:gemini-2.5-flash}")
     private String model;
 
     private final Environment environment;
@@ -36,21 +41,21 @@ public class GeneralQuestionAgentConfig {
         this.clientFactory = clientFactory;
     }
 
-    private String getRawApiKey() {
-        return GeminiApiKeyResolver.resolve(environment);
-    }
-
     @Bean
     public LlmAgent generalQuestionAgent() {
         var builder = LlmAgent.builder();
-        String rawKey = getRawApiKey();
-        String sanitizedKey = ApiKeySanitizer.sanitize(rawKey);
-        if (sanitizedKey != null && !sanitizedKey.isBlank()) {
-            var geminiModel = Gemini.builder()
-                    .modelName(model)
-                    .apiClient(clientFactory.buildClient(sanitizedKey))
-                    .build();
-            builder.model(geminiModel);
+        if (GeminiRuntimeAuth.canUseGemini(environment)) {
+            try {
+                Client client = clientFactory.buildClientForGemini(environment);
+                var geminiModel = Gemini.builder()
+                        .modelName(model)
+                        .apiClient(client)
+                        .build();
+                builder.model(geminiModel);
+            } catch (Exception e) {
+                log.warn("Could not build Gemini client (API key or Vertex/ADC): {}", e.getMessage());
+                builder.model(model);
+            }
         } else {
             builder.model(model);
         }

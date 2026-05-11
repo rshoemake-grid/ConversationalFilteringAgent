@@ -2,8 +2,9 @@ server:
   port: 8080
 
 # Environment variables (reference / defaults). Prefer OS env or secrets in production.
+# Optional nested block; resolver also reads GOOGLE_API_KEY / GEMINI_API_KEY / app.gemini.api-key directly.
 env:
-  GOOGLE_API_KEY: "${GOOGLE_API_KEY:enter api key here}"
+  GOOGLE_API_KEY: "${GOOGLE_API_KEY:}"
 
 # CORS - use specific origins in production (e.g. https://your-frontend.com)
 app:
@@ -13,12 +14,21 @@ app:
     # GCP credentials path. Override with GOOGLE_APPLICATION_CREDENTIALS env var.
     credentials-path: ${GOOGLE_APPLICATION_CREDENTIALS:C:/Users/rsho0016/AppData/Roaming/gcloud/application_default_credentials.json}
   gemini:
-    # ADK / Gemini (Approach B), clarifying-question generator, GET /api/models. Keys from Google AI Studio.
-    # Set env.GOOGLE_API_KEY above, or export GOOGLE_API_KEY (application.yml is gitignored when copied).
-    api-key: "${env.GOOGLE_API_KEY:${GOOGLE_API_KEY:enter api key here}}"
-    model: ${GEMINI_MODEL:gemini-flash-latest}
+    # ADK / Gemini (Approach B), clarifying questions, GET /api/models. Keys from Google AI Studio.
+    # Set the key here (gitignored application.yml only) OR use env — all are resolved by GeminiApiKeyResolver:
+    #   - app.gemini.api-key or app.gemini.apiKey (this file)
+    #   - GOOGLE_API_KEY or GEMINI_API_KEY (environment)
+    #   - env.GOOGLE_API_KEY from the nested env: block above (after ${} resolution)
+    api-key: "${GOOGLE_API_KEY:}"
+    model: ${GEMINI_MODEL:gemini-2.5-flash}
+    # When api-key/GOOGLE_API_KEY are unset: use Vertex AI Gemini with Application Default Credentials
+    # (same rules as gcloud / GOOGLE_APPLICATION_CREDENTIALS). Set project to your GCP project id/number.
+    vertex-project: ${GCP_PROJECT_ID:}
+    vertex-location: ${GEMINI_VERTEX_LOCATION:us-central1}
+    # Optional: when using a website-restricted Google AI Studio API key only
+    referer: ${GEMINI_REFERER:http://localhost:5173/}
 
-# REST API docs (default: /v3/api-docs, /swagger-ui/index.html)
+# REST API docs (default paths: /v3/api-docs, /swagger-ui/index.html)
 springdoc:
   api-docs:
     path: /v3/api-docs

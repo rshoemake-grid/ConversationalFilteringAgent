@@ -8,6 +8,25 @@ import {
   suggestedAnswerSubmitValue,
 } from '../utils/suggestedAnswerDisplay';
 import { shouldHideSuggestedAnswersFromResponse } from '../utils/suggestionVisibility';
+import { stripSuggestionEchoLinesFromAssistantText } from '../utils/stripSuggestionEchoes';
+
+/** Persisted across browser sessions (Approach A vs B). */
+export const ORCHESTRATION_MODE_STORAGE_KEY = 'cfa.orchestrationMode';
+
+function readStoredOrchestrationMode(): OrchestrationMode {
+  try {
+    if (typeof localStorage?.getItem !== 'function') {
+      return 'convo_commerce';
+    }
+    const raw = localStorage.getItem(ORCHESTRATION_MODE_STORAGE_KEY);
+    if (raw === 'convo_commerce' || raw === 'adk_orchestrator') {
+      return raw;
+    }
+  } catch {
+    // private mode / quota
+  }
+  return 'convo_commerce';
+}
 
 function createUserMessage(text: string, imageUri?: string, imageBase64?: string): Message {
   return {
@@ -72,6 +91,9 @@ function createAssistantMessage(
     suggestedAnswers = [{ displayText: 'Any', value: 'ANY' }];
   }
   suggestedAnswers = normalizeSuggestedAnswerList(suggestedAnswers);
+  if (!msgOptions?.suppressSuggestionChips && suggestedAnswers.length > 0) {
+    text = stripSuggestionEchoLinesFromAssistantText(text, suggestedAnswers);
+  }
   return {
     id: `a-${crypto.randomUUID()}`,
     role: 'assistant',
@@ -231,7 +253,17 @@ const MAX_SUGGESTED_ANSWERS_CAP = 50;
 const DEFAULT_PRODUCT_PAGE_SIZE = 20;
 
 export function useChat() {
-  const [mode, setMode] = useState<OrchestrationMode>('convo_commerce');
+  const [mode, setMode] = useState<OrchestrationMode>(readStoredOrchestrationMode);
+
+  useEffect(() => {
+    try {
+      if (typeof localStorage?.setItem === 'function') {
+        localStorage.setItem(ORCHESTRATION_MODE_STORAGE_KEY, mode);
+      }
+    } catch {
+      // ignore
+    }
+  }, [mode]);
   const [maxSuggestedAnswers, setMaxSuggestedAnswers] = useState(DEFAULT_MAX_SUGGESTED_ANSWERS);
   const [productPageSize, setProductPageSize] = useState(DEFAULT_PRODUCT_PAGE_SIZE);
   const [messages, setMessages] = useState<Message[]>([]);

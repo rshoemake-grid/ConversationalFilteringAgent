@@ -5,9 +5,19 @@ import org.springframework.util.StringUtils;
 
 /**
  * Resolves Gemini / Google AI API key from Spring {@link Environment} in a single order of precedence.
- * Sources: {@code app.gemini.api-key}, {@code GOOGLE_API_KEY}, {@code env.GOOGLE_API_KEY} (YAML block).
+ * <p>
+ * Order: {@code app.gemini.api-key}, {@code app.gemini.apiKey} (relaxed YAML binding),
+ * {@code GOOGLE_API_KEY}, {@code GEMINI_API_KEY}, {@code env.GOOGLE_API_KEY} (YAML {@code env:} block).
  */
 public final class GeminiApiKeyResolver {
+
+    private static final String[] PROPERTY_KEYS = {
+            "app.gemini.api-key",
+            "app.gemini.apiKey",
+            "GOOGLE_API_KEY",
+            "GEMINI_API_KEY",
+            "env.GOOGLE_API_KEY",
+    };
 
     private GeminiApiKeyResolver() {}
 
@@ -18,22 +28,42 @@ public final class GeminiApiKeyResolver {
         if (environment == null) {
             return null;
         }
-        String v = environment.getProperty("app.gemini.api-key");
-        if (StringUtils.hasText(v)) {
-            return v.trim();
-        }
-        v = environment.getProperty("GOOGLE_API_KEY");
-        if (StringUtils.hasText(v)) {
-            return v.trim();
-        }
-        v = environment.getProperty("env.GOOGLE_API_KEY");
-        if (StringUtils.hasText(v)) {
-            return v.trim();
+        for (String key : PROPERTY_KEYS) {
+            String v = environment.getProperty(key);
+            if (!StringUtils.hasText(v)) {
+                continue;
+            }
+            v = v.trim();
+            if (isDocumentationPlaceholder(v)) {
+                continue;
+            }
+            return v;
         }
         return null;
     }
 
+    /** Example-file placeholders — skip so a later source (e.g. env.GOOGLE_API_KEY) can supply the real key. */
+    private static boolean isDocumentationPlaceholder(String v) {
+        String t = v.trim();
+        return "enter api key here".equalsIgnoreCase(t)
+                || "your-api-key-here".equalsIgnoreCase(t)
+                || "<your-api-key>".equalsIgnoreCase(t);
+    }
+
     public static boolean isPresent(Environment environment) {
         return StringUtils.hasText(resolve(environment));
+    }
+
+    /**
+     * True if resolving yields a key that {@link ApiKeySanitizer} keeps as non-blank
+     * (excludes values that become empty after stripping comments/newlines).
+     */
+    public static boolean hasUsableApiKey(Environment environment) {
+        String raw = resolve(environment);
+        if (!StringUtils.hasText(raw)) {
+            return false;
+        }
+        String sanitized = ApiKeySanitizer.sanitize(raw);
+        return StringUtils.hasText(sanitized);
     }
 }

@@ -2,6 +2,8 @@ package com.conversationalcommerce.agent.config;
 
 import com.conversationalcommerce.agent.agent.ConversationalCommerceClient;
 import com.conversationalcommerce.agent.orchestration.AdkOrchestrator;
+import com.conversationalcommerce.agent.orchestration.AdkVaisrSessionBridge;
+import com.conversationalcommerce.agent.orchestration.VaisrRetailProductResolver;
 import com.conversationalcommerce.agent.tool.ConversationalCommerceTool;
 import com.conversationalcommerce.agent.tool.LoyaltyRecommendationTool;
 import com.google.adk.agents.LlmAgent;
@@ -24,7 +26,7 @@ public class AdkConfig {
 
     private static final Logger log = LoggerFactory.getLogger(AdkConfig.class);
 
-    @Value("${app.gemini.model:gemini-flash-latest}")
+    @Value("${app.gemini.model:gemini-2.5-flash}")
     private String model;
 
     private final ConversationalCommerceClient conversationalCommerceClient;
@@ -53,27 +55,18 @@ public class AdkConfig {
     }
 
     @PostConstruct
-    void warnIfApiKeyMissing() {
-        String raw = getRawApiKey();
-        if (raw == null || raw.isBlank()) {
-            log.warn("GOOGLE_API_KEY is not set. Approach B (ADK orchestrator) will return placeholder responses. Set GOOGLE_API_KEY for full functionality.");
+    void warnIfGeminiUnavailable() {
+        if (!GeminiRuntimeAuth.canUseGemini(environment)) {
+            log.warn("Gemini not configured. Approach B (ADK orchestrator) will return placeholder responses. "
+                    + "Set app.gemini.api-key or GOOGLE_API_KEY, or set GCP_PROJECT_ID / app.gemini.vertex-project "
+                    + "for Vertex AI with Application Default Credentials.");
         }
-    }
-
-    private String getRawApiKey() {
-        return GeminiApiKeyResolver.resolve(environment);
     }
 
     @Bean
-    @ConditionalOnExpression("T(com.conversationalcommerce.agent.config.GeminiApiKeyResolver).isPresent(@environment)")
-    public LlmAgent adkOrchestratorAgent() {
-        String rawKey = getRawApiKey();
-        String sanitizedKey = ApiKeySanitizer.sanitize(rawKey);
-        if (sanitizedKey == null || sanitizedKey.isBlank()) {
-            throw new IllegalStateException(
-                    "GOOGLE_API_KEY or app.gemini.api-key is set but yielded no valid key after sanitization. " +
-                    "Ensure the key has no newlines or trailing comments (e.g. '#export...').");
-        }
+    @ConditionalOnExpression("T(com.conversationalcommerce.agent.config.GeminiRuntimeAuth).canUseGemini(@environment)")
+    public LlmAgent adkOrchestratorAgent() throws Exception {
+        var client = clientFactory.buildClientForGemini(environment);
 
         FunctionTool searchProductsTool = FunctionTool.create(
                 ConversationalCommerceTool.class, "searchProducts");
@@ -82,7 +75,7 @@ public class AdkConfig {
 
         var geminiModel = Gemini.builder()
                 .modelName(model)
-                .apiClient(clientFactory.buildClient(sanitizedKey))
+                .apiClient(client)
                 .build();
 
         return LlmAgent.builder()
@@ -95,6 +88,11 @@ public class AdkConfig {
                     brands, or package ideas from your training data when the user is trying to shop—use the tool and
                     summarize what the store returns.
 
+                    When searchProducts returns suggestedAnswers (from the retail catalog), each entry has displayText and value.
+                    Do not invent different product attributes or options. Do NOT list, bullet, or repeat those option labels
+                    in your reply text—the client's UI already shows them as clickable chips. Respond with at most one short
+                    sentence, typically the clarifying question ending in ?, and nothing else.
+
                     If the user's request is vague (e.g. "show me products", "shoes", "browse"), ask at most one short
                     clarifying question, then search. If they answer with no preference—"any", "either", "no preference",
                     "doesn't matter", "you choose"—call searchProducts immediately with the topic you already have
@@ -103,6 +101,11 @@ public class AdkConfig {
                     When the user gives a specific query, use searchProducts right away.
                     When the user asks about rewards, loyalty, or recommendations, use getLoyaltyRecommendations.
                     When the user asks only about store hours or policies (not products), answer briefly from your knowledge.
+                    Pass the conversationId from the previous searchProducts response on follow-up calls. After the user picks a
+                    stock/storage chip (Ambient, Refrigerated, Dry storage, etc.), call searchProducts with the same catalog
+                    conversationId—do not answer with generic product education from training; the storefront searchProducts
+                    result drives the next step.
+
                     If search results are returned, summarize them for the user.
                     """)
                 .description("Orchestrates product search, loyalty info, and general shopping assistance")
@@ -112,7 +115,9 @@ public class AdkConfig {
 
     @Bean
     public AdkOrchestrator adkOrchestrator(
-            @Autowired(required = false) @Qualifier("adkOrchestratorAgent") LlmAgent adkOrchestratorAgent) {
-        return new AdkOrchestrator(adkOrchestratorAgent);
+            @Autowired(required = false) @Qualifier("adkOrchestratorAgent") LlmAgent adkOrchestratorAgent,
+            AdkVaisrSessionBridge adkVaisrSessionBridge,
+            VaisrRetailProductResolver vaisrRetailProductResolver) {
+        return new AdkOrchestrator(adkOrchestratorAgent, null, adkVaisrSessionBridge, vaisrRetailProductResolver);
     }
 }

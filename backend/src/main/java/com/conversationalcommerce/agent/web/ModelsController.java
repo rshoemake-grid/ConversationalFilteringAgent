@@ -23,7 +23,7 @@ public class ModelsController {
         this.modelsService = modelsService;
     }
 
-    @Operation(summary = "List Gemini models", description = "Returns available Gemini models that support generateContent. Requires GOOGLE_API_KEY or app.gemini.api-key.")
+    @Operation(summary = "List Gemini models", description = "Returns available Gemini models. Uses API key if set; otherwise Vertex AI with Application Default Credentials when a GCP project is configured.")
     @GetMapping("/models")
     public ResponseEntity<List<String>> listModels() {
         return modelsService

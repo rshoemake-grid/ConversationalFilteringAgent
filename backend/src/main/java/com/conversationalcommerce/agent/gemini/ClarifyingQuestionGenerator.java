@@ -1,7 +1,5 @@
 package com.conversationalcommerce.agent.gemini;
 
-import com.conversationalcommerce.agent.config.ApiKeySanitizer;
-import com.conversationalcommerce.agent.config.GeminiApiKeyResolver;
 import com.conversationalcommerce.agent.config.GeminiClientFactory;
 import com.google.genai.Client;
 import com.google.genai.types.GenerateContentConfig;
@@ -14,10 +12,10 @@ import org.springframework.stereotype.Service;
 
 /**
  * Uses Gemini to generate contextual clarifying questions when many products match a search.
- * Only active when GOOGLE_API_KEY or app.gemini.api-key is set.
+ * Active when an API key is set, or when Vertex AI with Application Default Credentials is configured.
  */
 @Service
-@ConditionalOnExpression("T(com.conversationalcommerce.agent.config.GeminiApiKeyResolver).isPresent(@environment)")
+@ConditionalOnExpression("T(com.conversationalcommerce.agent.config.GeminiRuntimeAuth).canUseGemini(@environment)")
 public class ClarifyingQuestionGenerator {
 
     private static final Logger log = LoggerFactory.getLogger(ClarifyingQuestionGenerator.class);
@@ -25,7 +23,7 @@ public class ClarifyingQuestionGenerator {
     private final Environment environment;
     private final GeminiClientFactory clientFactory;
 
-    @Value("${app.gemini.model:gemini-flash-latest}")
+    @Value("${app.gemini.model:gemini-2.5-flash}")
     private String model;
 
     public ClarifyingQuestionGenerator(Environment environment, GeminiClientFactory clientFactory) {
@@ -33,21 +31,11 @@ public class ClarifyingQuestionGenerator {
         this.clientFactory = clientFactory;
     }
 
-    private String getRawApiKey() {
-        return GeminiApiKeyResolver.resolve(environment);
-    }
-
     /**
      * Generates a brief, conversational message asking the user to narrow down their search.
      * Returns null on failure (caller should use fallback).
      */
     public String generate(String refinedQuery, int productCount) {
-        String rawKey = getRawApiKey();
-        String sanitizedKey = ApiKeySanitizer.sanitize(rawKey);
-        if (sanitizedKey == null || sanitizedKey.isBlank()) {
-            return null;
-        }
-
         String prompt = """
             You are a helpful shopping assistant. We found %d products matching "%s".
             Write ONE short, friendly sentence asking the user to narrow down their search.
@@ -55,7 +43,7 @@ public class ClarifyingQuestionGenerator {
             No preamble. Just the question. Max 2 sentences.
             """.formatted(productCount, refinedQuery);
 
-        try (Client client = clientFactory.buildClient(sanitizedKey)) {
+        try (Client client = clientFactory.buildClientForGemini(environment)) {
             var response = client.models.generateContent(
                     model,
                     prompt,
