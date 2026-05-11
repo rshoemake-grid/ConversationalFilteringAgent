@@ -140,7 +140,7 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             String prevRefined = (String) context.get("previousRefinedQuery");
             if (prevRefined != null && !prevRefined.isBlank()) {
                 searchQuery = prevRefined.trim();
-                storageTypeFilter = buildStorageTypeFilter(query);
+                storageTypeFilter = buildStorageTypeFilter(expandStorageTypeValue(query));
                 usedStorageTypeRecovery = true;
                 log.debug("Storage-type selection recovery: using previousRefinedQuery \"{}\" + filter {}", searchQuery, storageTypeFilter);
             }
@@ -248,10 +248,10 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                 String prevRefined = (String) context.get("previousRefinedQuery");
                 if (prevRefined != null && !prevRefined.isBlank()) {
                     String soleValue = remaining.get(0).value();
-                    // For stockType (GCP), use S/R/D directly; for storageType catalogs use canonical (AMBIENT etc.)
-                    String filterValue = ("S".equals(soleValue.trim()) || "R".equals(soleValue.trim()) || "D".equals(soleValue.trim()))
-                            ? soleValue.trim()
-                            : expandStorageTypeValue(soleValue);
+                    String filterValue = expandStorageTypeValue(soleValue);
+                    if (filterValue == null && soleValue != null) {
+                        filterValue = soleValue.trim();
+                    }
                     if (filterValue != null) {
                         try {
                             String stFilter = combineRetailFilters(
@@ -289,6 +289,7 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                 usedPreviousAgentFallback = true;
             }
         }
+        int clarifyingCount = ClarifyingFollowUpPolicy.effectiveProductCountForClarifying(products, searchResult);
         boolean agentProvidedClarifying = text != null && !text.isEmpty() && !text.startsWith("Searching for:")
                 && text.contains("?");
         String clarifyingQuestion = null; // Shown after products in UI
@@ -296,7 +297,7 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             // Approach A: Pass through agent response as-is; no app overrides
             // When agent provided a clarifying question, show it with products (don't clear)
             // Never clear products when user said "Any" and we recovered with previousRefinedQuery
-            if (!products.isEmpty() && products.size() > productCountThreshold && !usedNoPreferenceRecovery && !usedStorageTypeRecovery && !usedAutoRunSingleSuggestion && !agentProvidedClarifying) {
+            if (!products.isEmpty() && ClarifyingFollowUpPolicy.shouldOfferClarifyingFollowUp(clarifyingCount, productCountThreshold) && !usedNoPreferenceRecovery && !usedStorageTypeRecovery && !usedAutoRunSingleSuggestion && !agentProvidedClarifying) {
                 productsToReturn = List.of();
             } else if (!products.isEmpty() && isSearchingFallback) {
                 // Replace "Searching for: X" placeholder with a proper count when we have products
@@ -304,7 +305,7 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                 String countPhrase = n == 1
                         ? "I found 1 product matching your request."
                         : "I found " + n + " products matching your request.";
-                if (agentProvidedClarifying) {
+                if (agentProvidedClarifying && ClarifyingFollowUpPolicy.shouldOfferClarifyingFollowUp(clarifyingCount, productCountThreshold)) {
                     clarifyingQuestion = text;
                     text = countPhrase;
                 } else {
@@ -313,12 +314,13 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                 responseSource = "app";
             } else if (!products.isEmpty() && agentProvidedClarifying && !isSearchingFallback
                     && !usedNoPreferenceRecovery && !usedStorageTypeRecovery) {
-                // Agent provided clarifying question; count in text, question shown after products
                 int n = products.size();
                 String countPhrase = n == 1
                         ? "I found 1 product matching your request."
                         : "I found " + n + " products matching your request.";
-                clarifyingQuestion = text;
+                if (ClarifyingFollowUpPolicy.shouldOfferClarifyingFollowUp(clarifyingCount, productCountThreshold)) {
+                    clarifyingQuestion = text;
+                }
                 text = countPhrase;
                 responseSource = "app";
             } else if (products.isEmpty() && hasRefinedQuery && !usedPreviousAgentFallback) {
@@ -331,9 +333,9 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
         }
         if (!useConvoCommerceOnly) {
             // Approach B: Use our clarifying logic when many products; when agent provided one, show it with products
-            if (!products.isEmpty() && products.size() > productCountThreshold && !usedNoPreferenceRecovery && !usedStorageTypeRecovery && !usedAutoRunSingleSuggestion) {
+            if (!products.isEmpty() && ClarifyingFollowUpPolicy.shouldOfferClarifyingFollowUp(clarifyingCount, productCountThreshold) && !usedNoPreferenceRecovery && !usedStorageTypeRecovery && !usedAutoRunSingleSuggestion) {
                 String categoryHint = refinedQuery != null ? refinedQuery : "products";
-                int productCount = products.size();
+                int productCount = clarifyingCount;
                 int n = products.size();
                 String countPhrase = n == 1
                         ? "I found 1 product matching your request."
@@ -354,11 +356,20 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                     String countPhrase = n == 1
                             ? "I found 1 product matching your request."
                             : "I found " + n + " products matching your request.";
-                    if (!text.isEmpty() && !isSearchingFallback && text.contains("?")) {
+                    if (!text.isEmpty() && !isSearchingFallback && text.contains("?")
+                            && ClarifyingFollowUpPolicy.shouldOfferClarifyingFollowUp(clarifyingCount, productCountThreshold)) {
                         clarifyingQuestion = text;
                         text = countPhrase;
+                    } else if (text.isEmpty() || isSearchingFallback) {
+                        text = countPhrase;
+                    } else if (ClarifyingFollowUpPolicy.shouldOfferClarifyingFollowUp(clarifyingCount, productCountThreshold)) {
+                        text = countPhrase + "\n\n" + text;
                     } else {
-                        text = (text.isEmpty() || isSearchingFallback) ? countPhrase : countPhrase + "\n\n" + text;
+                        if (text.contains("?")) {
+                            text = countPhrase;
+                        } else {
+                            text = (text.isEmpty() || isSearchingFallback) ? countPhrase : countPhrase + "\n\n" + text;
+                        }
                     }
                 }
                 responseSource = "app";
@@ -368,6 +379,15 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                 text = (hasMeaningfulAgentText ? text + "\n\n" : "") + "No products found.";
                 responseSource = "app";
             }
+        }
+
+        if (!productsToReturn.isEmpty()
+                && !ClarifyingFollowUpPolicy.shouldOfferClarifyingFollowUp(clarifyingCount, productCountThreshold)
+                && clarifyingQuestion == null
+                && !usedPreviousAgentFallback
+                && !usedNoPreferenceRecovery
+                && !usedStorageTypeRecovery) {
+            suggestedAnswers = ClarifyingFollowUpPolicy.withoutStorageSuggestions(suggestedAnswers);
         }
 
         if (suggestedAnswers.isEmpty() && ((text != null && text.contains("?")) || (clarifyingQuestion != null && clarifyingQuestion.contains("?")))) {
@@ -576,11 +596,11 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
     }
 
     private static final java.util.Set<String> STORAGE_TYPE_VALUES = java.util.Set.of(
-            "FROZEN", "REFRIGERATED", "AMBIENT", "DRY_STORAGE", "F", "C", "S", "R", "D"
+            "FROZEN", "REFRIGERATED", "AMBIENT", "DRY_STORAGE", "F", "C", "S", "R", "D", "N"
     );
 
     private static final java.util.Set<String> NON_BRAND_VALUES = java.util.Set.of(
-            "FROZEN", "REFRIGERATED", "AMBIENT", "DRY_STORAGE", "COLD", "F", "C", "S", "R", "D", "ANY"
+            "FROZEN", "REFRIGERATED", "AMBIENT", "DRY_STORAGE", "COLD", "F", "C", "S", "R", "D", "N", "ANY"
     );
 
     private static final java.util.Set<String> NO_PREFERENCE_PHRASES = java.util.Set.of(
@@ -622,7 +642,8 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
 
     private static final java.util.Map<String, String> STORAGE_DISPLAY_DEFAULTS = java.util.Map.of(
             "S", "Ambient", "R", "Refrigerated", "D", "Dry storage",
-            "F", "Frozen", "C", "Refrigerated"
+            "F", "Frozen", "C", "Refrigerated",
+            "N", "Non-refrigerated"
     );
 
     /** Remove suggestions whose value is a stock/storage code — redundant after storage-type recovery returned products. */
@@ -659,8 +680,10 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             String session = sanitizeSessionProductFilter((String) context.get("previousProductFilter"));
             String normalized = (value != null ? value.trim().toUpperCase() : "");
             if (STORAGE_TYPE_VALUES.contains(normalized) || (value != null && STORAGE_TYPE_VALUES.contains(value.trim()))) {
-                String filterValue = ("S".equals(normalized) || "R".equals(normalized) || "D".equals(normalized)) ? value.trim() : expandStorageTypeValue(value);
-                if (filterValue == null) filterValue = value;
+                String filterValue = expandStorageTypeValue(value);
+                if (filterValue == null) {
+                    filterValue = value != null ? value.trim() : null;
+                }
                 String newFilter = buildStorageTypeFilter(filterValue);
                 String merged = combineRetailFilters(session, newFilter);
                 var prods = searchClient.search(config.placement(), config.branch(), baseQuery, visitorId, merged);
@@ -689,25 +712,9 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
 
     private record AutoRunResult(List<AgentResponse.ProductResult> products, String text, String filterUsed) {}
 
-    /** Expand short storage code (S, R, D) or display text to canonical value for filters. D/R/S are suggested-answer values sent to GCP as-is. */
+    /** Expand short storage code or display text to the value used in Retail {@code attributes.*: ANY("…")}. */
     private String expandStorageTypeValue(String value) {
-        if (value == null || value.isBlank()) return null;
-        String trimmed = value.trim().toUpperCase();
-        return switch (trimmed) {
-            case "D" -> "DRY_STORAGE";
-            case "R" -> "REFRIGERATED";
-            case "S" -> "AMBIENT";
-            default -> {
-                var expansion = config.getAttributeValueExpansion();
-                if (expansion == null) yield value.trim();
-                var storageMap = expansion.get("storageType");
-                if (storageMap == null) yield value.trim();
-                String resolved = findExpansionMatch(storageMap, value.trim());
-                if (resolved != null && ("D".equals(resolved) || "R".equals(resolved) || "S".equals(resolved)))
-                    yield switch (resolved) { case "D" -> "DRY_STORAGE"; case "R" -> "REFRIGERATED"; case "S" -> "AMBIENT"; default -> resolved; };
-                yield resolved != null ? resolved : value.trim();
-            }
-        };
+        return StockTypeRetailFilter.attributeValueForFilter(value, config);
     }
 
     /** Add brand filter only when user selected a suggested answer that looks like a brand (not storage type, not a search term like "shrimp"). */

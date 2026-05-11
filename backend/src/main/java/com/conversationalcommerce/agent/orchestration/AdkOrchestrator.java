@@ -1,7 +1,9 @@
 package com.conversationalcommerce.agent.orchestration;
 
 import com.conversationalcommerce.agent.agent.AgentResponse;
+import com.conversationalcommerce.agent.agent.ClarifyingFollowUpPolicy;
 import com.conversationalcommerce.agent.agent.ConversationalCommerceClient;
+import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
 import com.google.adk.agents.LlmAgent;
 import com.google.adk.events.Event;
 import com.google.adk.runner.InMemoryRunner;
@@ -53,16 +55,17 @@ public class AdkOrchestrator implements ChatOrchestrator {
     private final ChatOrchestrator testDelegate;
     private final AdkVaisrSessionBridge vaisrSessionBridge;
     private final VaisrRetailProductResolver vaisrRetailProductResolver;
+    private final ConversationalCommerceConfig commerceConfig;
 
     public AdkOrchestrator(LlmAgent adkOrchestratorAgent) {
-        this(adkOrchestratorAgent, adkOrchestratorAgent == null ? STUB_WHEN_NO_API_KEY : null, null, null);
+        this(adkOrchestratorAgent, adkOrchestratorAgent == null ? STUB_WHEN_NO_API_KEY : null, null, null, null);
     }
 
     /**
      * Package-private constructor for testing. When testDelegate is non-null, process() delegates to it.
      */
     AdkOrchestrator(LlmAgent adkOrchestratorAgent, ChatOrchestrator testDelegate) {
-        this(adkOrchestratorAgent, testDelegate, null, null);
+        this(adkOrchestratorAgent, testDelegate, null, null, null);
     }
 
     /**
@@ -73,11 +76,24 @@ public class AdkOrchestrator implements ChatOrchestrator {
             ChatOrchestrator testDelegate,
             AdkVaisrSessionBridge vaisrSessionBridge,
             VaisrRetailProductResolver vaisrRetailProductResolver) {
+        this(adkOrchestratorAgent, testDelegate, vaisrSessionBridge, vaisrRetailProductResolver, null);
+    }
+
+    /**
+     * Full production constructor including commerce config (for clarifying / suggestion policy).
+     */
+    public AdkOrchestrator(
+            LlmAgent adkOrchestratorAgent,
+            ChatOrchestrator testDelegate,
+            AdkVaisrSessionBridge vaisrSessionBridge,
+            VaisrRetailProductResolver vaisrRetailProductResolver,
+            ConversationalCommerceConfig commerceConfig) {
         this.adkOrchestratorAgent = adkOrchestratorAgent;
         this.runner = testDelegate != null ? null : new InMemoryRunner(adkOrchestratorAgent, APP_NAME);
         this.testDelegate = testDelegate;
         this.vaisrSessionBridge = vaisrSessionBridge;
         this.vaisrRetailProductResolver = vaisrRetailProductResolver;
+        this.commerceConfig = commerceConfig;
     }
 
     public AgentResponse process(String message, String conversationId, Map<String, Object> context) {
@@ -166,6 +182,11 @@ public class AdkOrchestrator implements ChatOrchestrator {
                     .productTotalSizeIsApproximate(aug.productTotalSizeIsApproximate())
                     .productNextPageToken(aug.productNextPageToken())
                     .clarifyingQuestion(aug.clarifyingQuestion());
+            if (commerceConfig != null && shouldDropStorageSuggestionsAfterSmallResult(aug, commerceConfig)) {
+                List<ConversationalCommerceClient.SuggestedAnswer> stripped =
+                        ClarifyingFollowUpPolicy.withoutStorageSuggestions(List.copyOf(lastSearchSuggestions));
+                responseBuilder.suggestedAnswers(stripped);
+            }
         }
 
         return responseBuilder.build();
@@ -184,6 +205,19 @@ public class AdkOrchestrator implements ChatOrchestrator {
      */
     static boolean hasSearchProductsErrorWithNoSuccess(String failureDetail, Map<String, Object> lastSuccessfulTool) {
         return failureDetail != null && !failureDetail.isBlank() && lastSuccessfulTool == null;
+    }
+
+    private static boolean shouldDropStorageSuggestionsAfterSmallResult(
+            VaisrRetailProductResolver.Augmentation aug, ConversationalCommerceConfig config) {
+        if (aug.products() == null || aug.products().isEmpty()) {
+            return false;
+        }
+        if (aug.clarifyingQuestion() != null && !aug.clarifyingQuestion().isBlank()) {
+            return false;
+        }
+        int count = ClarifyingFollowUpPolicy.effectiveProductCountForClarifying(
+                aug.products().size(), aug.productTotalSize());
+        return !ClarifyingFollowUpPolicy.shouldOfferClarifyingFollowUp(count, config.productCountThreshold());
     }
 
     static String mergeAdkTextWithSearchFailure(

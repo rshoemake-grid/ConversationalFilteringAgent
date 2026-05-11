@@ -57,7 +57,10 @@ conversational-commerce:
   default-visitor-id: default-visitor
   # ENABLED lets the agent ask follow-up questions. Requires GCP Console setup (see CONFIG.md).
   conversational-filtering-mode: ${CONVERSATIONAL_FILTERING_MODE:DISABLED}
-  # GCP returns attributes.stockType; use "stockType" for product filters
+  # GCP returns attributes.stockType; use "stockType" for product filters.
+  # Retail ANY("…") uses S/R/D/N as in the catalog by default (display mapping is UI-only).
+  # Set true if attributes.stockType stores AMBIENT / REFRIGERATED / DRY_STORAGE instead of letters.
+  stock-type-filter-use-canonical-values: ${STOCK_TYPE_FILTER_USE_CANONICAL_VALUES:false}
   stock-type-filter-attribute: ${STOCK_TYPE_FILTER_ATTRIBUTE:stockType}
   # Max products returned per search (REST and gRPC)
   product-search-page-size: ${PRODUCT_SEARCH_PAGE_SIZE:20}
@@ -71,12 +74,13 @@ conversational-commerce:
   #
   # Display: API value -> label for UI. Expansion: user/short input -> canonical value for GCP.
   attribute-display-mapping:
-    storageType:  # Stock / storage (D/R/S and F/C codes)
+    storageType:  # Stock / storage (D/R/S/N and F/C codes)
       F: Frozen
       C: Refrigerated
       S: Ambient
       R: Refrigerated
       D: Dry storage
+      N: Non-refrigerated
       FROZEN: Frozen
       REFRIGERATED: Refrigerated
       AMBIENT: Ambient
@@ -90,6 +94,7 @@ conversational-commerce:
       S: Ambient
       R: Refrigerated
       D: Dry storage
+      N: Non-refrigerated
       FROZEN: Frozen
       REFRIGERATED: Refrigerated
       AMBIENT: Ambient
@@ -296,7 +301,9 @@ conversational-commerce:
     alcoholContent:
       "0pct": Alcohol free
     # Add more catalog-specific keys as they appear in raw API responses (Raw API Response panel).
-  # Expansion: maps user text to canonical values before GCP (avoids RETAIL_IRRELEVANT).
+  # Expansion: maps user text before GCP conversational calls (avoids RETAIL_IRRELEVANT).
+  # If attributes.stockType uses single letters in the catalog, avoid mapping S/R/D -> AMBIENT/... here
+  # for those keys unless you also set stock-type-filter-use-canonical-values: true; display text uses attribute-display-mapping.
   attribute-value-expansion:
     storageType:
       F: FROZEN

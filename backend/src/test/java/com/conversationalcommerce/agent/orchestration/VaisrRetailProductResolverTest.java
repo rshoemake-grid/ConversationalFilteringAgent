@@ -84,4 +84,40 @@ class VaisrRetailProductResolverTest {
         assertThat(aug.refinedQuery()).isEqualTo("rice");
         assertThat(aug.text()).doesNotContain("different types of rice");
     }
+
+    @Test
+    void storageRecoveryWithNoProductsDoesNotDuplicateNoProductsMessage() {
+        when(searchClient.searchWithPagination(
+                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"S\")"), eq(null), eq(null)))
+                .thenReturn(SearchResult.of(List.of(), null, 0));
+
+        var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(
+                "What type of stock?", "c-gcp", "rice", "SIMPLE_PRODUCT_SEARCH", "agent", "{}", List.of());
+        var ctx = Map.<String, Object>of(
+                "visitorId", "v1",
+                "previousRefinedQuery", "rice",
+                "previousSuggestedAnswers",
+                List.of(Map.of("displayText", "Ambient", "value", "S")));
+
+        VaisrRetailProductResolver.Augmentation aug = resolver.resolve(vaisr, "Ambient", ctx);
+
+        assertThat(aug.products()).isEmpty();
+        assertThat(aug.text()).isEqualTo("No products found.");
+    }
+
+    @Test
+    void vaisrAlreadySaysNoProductsDoesNotAppendAgain() {
+        when(searchClient.searchWithPagination(
+                eq("p"), eq("b"), eq("rice"), any(), eq(null), eq(null), eq(null)))
+                .thenReturn(SearchResult.of(List.of(), null, 0));
+
+        var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(
+                "No products found.", "c-gcp", "rice", "PRODUCT_DETAILS", "agent", "{}", List.of());
+        var ctx = Map.<String, Object>of("visitorId", "v1");
+
+        VaisrRetailProductResolver.Augmentation aug = resolver.resolve(vaisr, "detail", ctx);
+
+        assertThat(aug.products()).isEmpty();
+        assertThat(aug.text()).isEqualTo("No products found.");
+    }
 }

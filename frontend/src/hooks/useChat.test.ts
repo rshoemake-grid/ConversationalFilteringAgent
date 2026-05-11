@@ -23,6 +23,35 @@ describe('useChat', () => {
     vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid' })
   })
 
+  it('sends previousRefinedQuery from last user search when assistant omits refinedQuery', async () => {
+    const send = vi.mocked(chatApi.sendChatMessage)
+    send
+      .mockResolvedValueOnce({
+        text: 'What type of stock?',
+        conversationId: 'c1',
+        suggestedAnswers: [
+          { displayText: 'Ambient', value: 'S' },
+          { displayText: 'Refrigerated', value: 'R' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        text: 'OK',
+        conversationId: 'c1',
+        products: [],
+      })
+
+    const { result } = renderHook(() => useChat())
+    act(() => result.current.setInput('rice'))
+    await act(async () => result.current.handleSend())
+
+    act(() => result.current.handleSuggestedAnswer({ displayText: 'Ambient', value: 'S' }))
+    await act(async () => {})
+
+    expect(send).toHaveBeenCalledTimes(2)
+    const secondCall = send.mock.calls[1][0]
+    expect(secondCall.previousRefinedQuery).toBe('rice')
+  })
+
   it('persists orchestration mode to localStorage when setMode is called', () => {
     const { result } = renderHook(() => useChat())
     act(() => {

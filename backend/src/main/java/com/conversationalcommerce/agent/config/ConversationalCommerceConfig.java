@@ -17,6 +17,11 @@ public class ConversationalCommerceConfig {
     private String conversationalFilteringMode = "DISABLED";
     /** Filter attribute for stock/storage type (GCP often returns attributes.stockType). Use "stockType" or "storageType". */
     private String stockTypeFilterAttribute = "stockType";
+    /**
+     * When true, Retail {@code ANY("…")} uses AMBIENT / REFRIGERATED / DRY_STORAGE for S/R/D.
+     * Default false: catalogs often index single-letter stock codes; UI mapping is display-only.
+     */
+    private boolean stockTypeFilterUseCanonicalValues = false;
     /** Max products per search request (REST and gRPC). Default 20. */
     private int productSearchPageSize = 20;
     /** Above this count we ask user to narrow (or show products if in recovery). Default 50 to avoid hiding results. */
@@ -53,6 +58,14 @@ public class ConversationalCommerceConfig {
     }
     public void setStockTypeFilterAttribute(String v) {
         this.stockTypeFilterAttribute = v != null ? v : "stockType";
+    }
+
+    public boolean stockTypeFilterUseCanonicalValues() {
+        return stockTypeFilterUseCanonicalValues;
+    }
+
+    public void setStockTypeFilterUseCanonicalValues(boolean stockTypeFilterUseCanonicalValues) {
+        this.stockTypeFilterUseCanonicalValues = stockTypeFilterUseCanonicalValues;
     }
 
     public int productSearchPageSize() {

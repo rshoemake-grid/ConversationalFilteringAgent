@@ -91,7 +91,7 @@ function createAssistantMessage(
     suggestedAnswers = [{ displayText: 'Any', value: 'ANY' }];
   }
   suggestedAnswers = normalizeSuggestedAnswerList(suggestedAnswers);
-  if (!msgOptions?.suppressSuggestionChips && suggestedAnswers.length > 0) {
+  if (!msgOptions?.suppressSuggestionChips && suggestedAnswers != null && suggestedAnswers.length > 0) {
     text = stripSuggestionEchoLinesFromAssistantText(text, suggestedAnswers);
   }
   return {
@@ -153,6 +153,53 @@ function getLastNonEmptyRefinedQuery(messages: Message[]): string | undefined {
     }
   }
   return undefined;
+}
+
+/** Quick-reply values / labels that are not catalog search terms (storage chips, no-preference). */
+const NON_SEARCH_QUICK_REPLIES = new Set([
+  'S',
+  'R',
+  'D',
+  'N',
+  'F',
+  'C',
+  'ANY',
+  'AMBIENT',
+  'REFRIGERATED',
+  'DRY STORAGE',
+  'NON-REFRIGERATED',
+  'FROZEN',
+]);
+
+/**
+ * When GCP omits refinedQuery on the assistant turn that showed storage chips, recovery still needs
+ * the user's product term (e.g. "rice"). Walk user messages from the latest, skipping chip clicks.
+ */
+function getLastUserProductSearchText(messages: Message[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== 'user' || m.isError) continue;
+    const t = m.content?.trim() ?? '';
+    if (!t || t === '[Image]') continue;
+    if (NON_SEARCH_QUICK_REPLIES.has(t.toUpperCase())) continue;
+    return t;
+  }
+  return undefined;
+}
+
+/**
+ * previousRefinedQuery for storage / no-preference recovery: API refinedQuery if present, else last real user search.
+ */
+function resolvePreviousRefinedQueryForContext(
+  messages: Message[],
+  lastAssistant: Message | undefined
+): string | undefined {
+  return (
+    getLastNonEmptyRefinedQuery(messages) ??
+    lastAssistant?.refinedQuery?.trim() ??
+    getLastUserProductSearchText(messages) ??
+    undefined
+  );
 }
 
 /**
@@ -468,7 +515,7 @@ export function useChat() {
       imageBase64: rawBase64,
       previousAssistantText: previousAssistantTextForContext(lastAssistant),
       previousSuggestedAnswers: lastAssistant?.suggestedAnswers,
-      previousRefinedQuery: getLastNonEmptyRefinedQuery(messages) ?? lastAssistant?.refinedQuery,
+      previousRefinedQuery: resolvePreviousRefinedQueryForContext(messages, lastAssistant),
     });
   }, [loading, pendingImage, sendMessage, messages]);
 
@@ -483,7 +530,7 @@ export function useChat() {
       sendMessage(t, {
         previousAssistantText: previousAssistantTextForContext(lastAssistant),
         previousSuggestedAnswers: lastAssistant?.suggestedAnswers,
-        previousRefinedQuery: getLastNonEmptyRefinedQuery(messages) ?? lastAssistant?.refinedQuery,
+        previousRefinedQuery: resolvePreviousRefinedQueryForContext(messages, lastAssistant),
       });
     },
     [loading, sendMessage, messages]
@@ -499,7 +546,7 @@ export function useChat() {
       sendMessage(submit, {
         previousAssistantText: previousAssistantTextForContext(lastAssistant),
         previousSuggestedAnswers: lastAssistant?.suggestedAnswers,
-        previousRefinedQuery: getLastNonEmptyRefinedQuery(messages) ?? lastAssistant?.refinedQuery,
+        previousRefinedQuery: resolvePreviousRefinedQueryForContext(messages, lastAssistant),
         fromSuggestedAnswer: true,
       });
     },
@@ -522,7 +569,7 @@ export function useChat() {
         imageBase64,
         previousAssistantText: previousAssistantTextForContext(lastAssistant),
         previousSuggestedAnswers: lastAssistant?.suggestedAnswers,
-        previousRefinedQuery: getLastNonEmptyRefinedQuery(messages) ?? lastAssistant?.refinedQuery,
+        previousRefinedQuery: resolvePreviousRefinedQueryForContext(messages, lastAssistant),
       });
     },
     [sendMessage, messages]
@@ -544,7 +591,7 @@ export function useChat() {
         imageBase64,
         previousAssistantText: previousAssistantTextForContext(prevAssistant),
         previousSuggestedAnswers: prevAssistant?.suggestedAnswers,
-        previousRefinedQuery: getLastNonEmptyRefinedQuery(messages) ?? prevAssistant?.refinedQuery,
+        previousRefinedQuery: resolvePreviousRefinedQueryForContext(messages, prevAssistant),
       });
     }
   }, [messages, loading, sendMessage]);
@@ -556,7 +603,10 @@ export function useChat() {
   const handleLoadMore = useCallback(
     (msg: Message) => {
       if (!msg.productNextPageToken || loading) return;
-      const refined = msg.refinedQuery ?? getLastNonEmptyRefinedQuery(messages);
+      const refined =
+        msg.refinedQuery?.trim() ||
+        getLastNonEmptyRefinedQuery(messages) ||
+        getLastUserProductSearchText(messages);
       if (!refined?.trim()) return;
       sendMessage('', {
         productPageToken: msg.productNextPageToken,

@@ -1,7 +1,9 @@
 package com.conversationalcommerce.agent.orchestration;
 
 import com.conversationalcommerce.agent.agent.AgentResponse;
+import com.conversationalcommerce.agent.agent.ClarifyingFollowUpPolicy;
 import com.conversationalcommerce.agent.agent.ConversationalCommerceClient;
+import com.conversationalcommerce.agent.agent.StockTypeRetailFilter;
 import com.conversationalcommerce.agent.agent.ProductEnrichmentService;
 import com.conversationalcommerce.agent.agent.RetailSearchClient;
 import com.conversationalcommerce.agent.agent.SearchResult;
@@ -30,11 +32,11 @@ public class VaisrRetailProductResolver {
             + "For example: What type or form? (e.g. raw, cooked, peeled — or style, color) Any size or price range?";
 
     private static final Set<String> STORAGE_TYPE_VALUES = Set.of(
-            "FROZEN", "REFRIGERATED", "AMBIENT", "DRY_STORAGE", "F", "C", "S", "R", "D"
+            "FROZEN", "REFRIGERATED", "AMBIENT", "DRY_STORAGE", "F", "C", "S", "R", "D", "N"
     );
 
     private static final Set<String> NON_BRAND_VALUES = Set.of(
-            "FROZEN", "REFRIGERATED", "AMBIENT", "DRY_STORAGE", "COLD", "F", "C", "S", "R", "D", "ANY"
+            "FROZEN", "REFRIGERATED", "AMBIENT", "DRY_STORAGE", "COLD", "F", "C", "S", "R", "D", "N", "ANY"
     );
 
     private static final Set<String> NO_PREFERENCE_PHRASES = Set.of(
@@ -105,7 +107,7 @@ public class VaisrRetailProductResolver {
             String prevRefined = (String) context.get("previousRefinedQuery");
             if (prevRefined != null && !prevRefined.isBlank()) {
                 searchQuery = prevRefined.trim();
-                storageTypeFilter = buildStorageTypeFilter(query);
+                storageTypeFilter = buildStorageTypeFilter(StockTypeRetailFilter.attributeValueForFilter(query, config));
                 usedStorageTypeRecovery = true;
             }
         }
@@ -160,13 +162,14 @@ public class VaisrRetailProductResolver {
         boolean isSearchingFallback = text.startsWith("Searching for:");
         boolean hasRefinedQuery = refinedQuery != null && !refinedQuery.isEmpty();
         int productCountThreshold = config.productCountThreshold();
+        int clarifyingCount = ClarifyingFollowUpPolicy.effectiveProductCountForClarifying(products, searchResult);
 
         boolean agentProvidedClarifying = text != null && !text.isEmpty() && !text.startsWith("Searching for:")
                 && text.contains("?");
         String clarifyingQuestion = null;
 
         // Approach B formatting (aligned with ConversationalCommerceAdapter when orchestrationMode is not convo_commerce)
-        if (!products.isEmpty() && products.size() > productCountThreshold
+        if (!products.isEmpty() && ClarifyingFollowUpPolicy.shouldOfferClarifyingFollowUp(clarifyingCount, productCountThreshold)
                 && !usedNoPreferenceRecovery && !usedStorageTypeRecovery) {
             String categoryHint = refinedQuery != null ? refinedQuery : "products";
             int n = products.size();
@@ -176,7 +179,7 @@ public class VaisrRetailProductResolver {
             String clarifyingText = agentProvidedClarifying
                     ? text
                     : (clarifyingGenerator
-                            .map(gen -> gen.generate(categoryHint, n))
+                            .map(gen -> gen.generate(categoryHint, clarifyingCount))
                             .filter(t -> t != null && !t.isBlank())
                             .orElse(FALLBACK_CLARIFY.formatted(categoryHint)));
             clarifyingQuestion = clarifyingText;
@@ -188,16 +191,30 @@ public class VaisrRetailProductResolver {
                 String countPhrase = n == 1
                         ? "I found 1 product matching your request."
                         : "I found " + n + " products matching your request.";
-                if (!text.isEmpty() && !isSearchingFallback && text.contains("?")) {
+                if (!text.isEmpty() && !isSearchingFallback && text.contains("?")
+                        && ClarifyingFollowUpPolicy.shouldOfferClarifyingFollowUp(clarifyingCount, productCountThreshold)) {
                     clarifyingQuestion = text;
                     text = countPhrase;
+                } else if (text.isEmpty() || isSearchingFallback) {
+                    text = countPhrase;
+                } else if (ClarifyingFollowUpPolicy.shouldOfferClarifyingFollowUp(clarifyingCount, productCountThreshold)) {
+                    text = countPhrase + "\n\n" + text;
                 } else {
-                    text = (text.isEmpty() || isSearchingFallback) ? countPhrase : countPhrase + "\n\n" + text;
+                    if (text.contains("?")) {
+                        text = countPhrase;
+                    } else {
+                        text = (text.isEmpty() || isSearchingFallback) ? countPhrase : countPhrase + "\n\n" + text;
+                    }
                 }
             }
-        } else if (products.isEmpty() && hasRefinedQuery) {
+        } else if (products.isEmpty() && hasRefinedQuery && !usedNoPreferenceRecovery && !usedStorageTypeRecovery) {
+            // Recovery paths above already set "No products found." when the retail search is empty; do not append again.
             boolean hasMeaningfulAgentText = text != null && !text.isEmpty() && !text.startsWith("Searching for:");
-            text = (hasMeaningfulAgentText ? text + "\n\n" : "") + "No products found.";
+            if (isNoProductsOnlyAgentText(text)) {
+                text = "No products found.";
+            } else {
+                text = (hasMeaningfulAgentText ? text + "\n\n" : "") + "No products found.";
+            }
         }
 
         long totalSize = searchResult != null ? searchResult.totalSize() : -1;
@@ -233,6 +250,15 @@ public class VaisrRetailProductResolver {
 
     private static boolean messageIsBlank(String m) {
         return m == null || m.trim().isEmpty();
+    }
+
+    /** True when VAISR / agent text is already only the standard empty-result line (avoid "No products found." twice). */
+    private static boolean isNoProductsOnlyAgentText(String text) {
+        if (text == null) {
+            return false;
+        }
+        String t = text.trim();
+        return "No products found.".equalsIgnoreCase(t) || "No products found".equalsIgnoreCase(t);
     }
 
     private int getEffectivePageSize(Integer override) {
@@ -341,7 +367,7 @@ public class VaisrRetailProductResolver {
         return false;
     }
 
-    /** Accepts S/R/D, DRY_STORAGE, "dry storage", etc. */
+    /** Accepts S/R/D/N, DRY_STORAGE, "dry storage", etc. */
     private static boolean looksLikeStorageTypeToken(String expandedQuery) {
         String u = expandedQuery.trim().toUpperCase(Locale.ROOT).replace(' ', '_');
         return STORAGE_TYPE_VALUES.contains(expandedQuery.trim().toUpperCase(Locale.ROOT))

@@ -118,6 +118,6 @@ public class AdkConfig {
             @Autowired(required = false) @Qualifier("adkOrchestratorAgent") LlmAgent adkOrchestratorAgent,
             AdkVaisrSessionBridge adkVaisrSessionBridge,
             VaisrRetailProductResolver vaisrRetailProductResolver) {
-        return new AdkOrchestrator(adkOrchestratorAgent, null, adkVaisrSessionBridge, vaisrRetailProductResolver);
+        return new AdkOrchestrator(adkOrchestratorAgent, null, adkVaisrSessionBridge, vaisrRetailProductResolver, config);
     }
 }

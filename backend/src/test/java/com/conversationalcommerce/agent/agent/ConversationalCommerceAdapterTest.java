@@ -40,6 +40,31 @@ class ConversationalCommerceAdapterTest {
     }
 
     @Test
+    void sendMessage_underProductCountThreshold_omitsStockClarifyingQuestionAndStorageChips() {
+        stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
+                "What type of stock do you prefer?",
+                "conv-1",
+                "rice",
+                "SIMPLE_PRODUCT_SEARCH",
+                "agent",
+                null,
+                List.of(
+                        new ConversationalCommerceClient.SuggestedAnswer("S", "S"),
+                        new ConversationalCommerceClient.SuggestedAnswer("R", "R"))
+        ));
+        stubSearchClient.setProducts(List.of(
+                AgentResponse.ProductResult.of("p1", "Rice", "White", "$5", null)
+        ));
+
+        AgentResponse response = adapter.sendMessage("", "rice", Map.of());
+
+        assertThat(response.products()).hasSize(1);
+        assertThat(response.clarifyingQuestion()).isNull();
+        assertThat(response.text()).doesNotContain("What type of stock");
+        assertThat(response.suggestedAnswers()).isEmpty();
+    }
+
+    @Test
     void sendMessage_mergesPreviousProductFilterWithNewBrandFilter() {
         stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
                 "Which brand?",
@@ -534,7 +559,8 @@ class ConversationalCommerceAdapterTest {
 
     @Test
     void sendMessage_storageTypeSelectionUsesPreviousRefinedQueryAndFilter() {
-        config.setAttributeValueExpansion(Map.of("storageType", Map.of("D", "DRY_STORAGE")));
+        // Letter stock codes: no attributeValueExpansion D->DRY_STORAGE here — that expansion is for GCP text,
+        // and would replace "D" before the Retail filter runs.
         adapter = new ConversationalCommerceAdapter(stubClient, stubSearchClient, new ProductEnrichmentService(Optional.empty()), config, Optional.empty(), new ProductPoolNarrower(), null);
 
         stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
@@ -569,7 +595,7 @@ class ConversationalCommerceAdapterTest {
         assertThat(response.products().get(0).title()).isEqualTo("Long Grain Rice");
         assertThat(response.suggestedAnswers()).isEmpty();
         assertThat(stubSearchClient.lastQuery).isEqualTo("rice");
-        assertThat(stubSearchClient.lastFilter).contains("attributes.").contains("D");
+        assertThat(stubSearchClient.lastFilter).contains("attributes.").contains("\"D\"");
     }
 
     @Test
@@ -666,7 +692,7 @@ class ConversationalCommerceAdapterTest {
         assertThat(response.text()).contains("Showing 1 of");
         assertThat(response.suggestedAnswers()).isEmpty();
         assertThat(stubSearchClient.lastQuery).isEqualTo("rice");
-        assertThat(stubSearchClient.lastFilter).contains("stockType").contains("S");
+        assertThat(stubSearchClient.lastFilter).contains("stockType").contains("\"S\"");
     }
 
     @Test

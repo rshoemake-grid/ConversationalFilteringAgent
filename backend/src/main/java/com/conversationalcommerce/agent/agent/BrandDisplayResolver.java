@@ -63,7 +63,7 @@ public class BrandDisplayResolver {
             }
         }
 
-        // 1b. When no attribute name, try storageType mapping for S/R/D/F/C (common stock-type short codes)
+        // 1b. When no attribute name, try storageType mapping for S/R/D/N/F/C (common stock-type short codes)
         if ((attrKey == null || attrKey.isEmpty()) && mapping != null) {
             var storageMap = mapping.get("storageType");
             if (storageMap != null && storageMap.containsKey(value)) {
