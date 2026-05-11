@@ -4,6 +4,7 @@ Narrative documentation for how the Conversational Filtering Agent works. Prefer
 
 | Document | What it covers |
 |----------|----------------|
+| [user-flow-and-services.md](user-flow-and-services.md) | **User journeys** (chips, load more, image) and **which services/APIs run** in each orchestration mode |
 | [system-overview.md](system-overview.md) | Stack, major components, end-to-end path from browser to Google Cloud |
 | [product-search-and-retail-apis.md](product-search-and-retail-apis.md) | **Why there are two GCP calls** (conversational vs product search), pagination, enrichment, transports |
 | [orchestration-and-modes.md](orchestration-and-modes.md) | `convo_commerce` vs `adk_orchestrator`, orchestrators, tools |
@@ -18,4 +19,4 @@ Narrative documentation for how the Conversational Filtering Agent works. Prefer
 | [../CODE.md](../CODE.md) | Package layout, API shapes, configuration tables |
 | [../DEPLOY.md](../DEPLOY.md) | Docker, Kubernetes, CI |
 
-Suggested reading order: **system-overview** → **product-search-and-retail-apis** → **orchestration-and-modes** → **frontend-and-chat-api**.
+Suggested reading order: **system-overview** → **user-flow-and-services** → **product-search-and-retail-apis** → **orchestration-and-modes** → **frontend-and-chat-api**.

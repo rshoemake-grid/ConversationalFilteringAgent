@@ -4,8 +4,8 @@ A full-stack application (Spring Boot + React) that provides a chat UI to intera
 
 ## Architecture
 
-- **Approach A (Convo Commerce as Orchestrator)**: Conversational Commerce API is primary; routes general questions to an ADK specialist agent.
-- **Approach B (ADK as Orchestrator)**: ADK LlmAgent orchestrates; uses Conversational Commerce as a tool for product search, plus loyalty/recommendation tools.
+- **Approach A (`convo_commerce`)**: `ConversationalCommerceAdapter` calls **Retail conversationalSearch** for intent and follow-ups, then **Retail Search** for the product grid (and optional **Product.get** enrichment). No Gemini/ADK in the default wiring for this path.
+- **Approach B (`adk_orchestrator`)**: **Gemini** (ADK `LlmAgent`) orchestrates the turn; **`ConversationalCommerceTool.searchProducts`** calls the same **conversationalSearch** API; **`VaisrRetailProductResolver`** fills products via **Retail Search** and aligns UX with the adapter. Additional tools (loyalty, recommendations) may be attached to the agent.
 
 ## Prerequisites
 
@@ -111,6 +111,7 @@ Response:
 | Document | Description |
 |----------|-------------|
 | [docs/README.md](docs/README.md) | **Start here** — index of topic guides (GCP two-call flow, modes, frontend/API) |
+| [docs/user-flow-and-services.md](docs/user-flow-and-services.md) | User flows and which services (Retail, Gemini, tools) run per mode |
 | [CODE.md](CODE.md) | Code architecture, API reference, data models, key flows |
 | [DEPLOY.md](DEPLOY.md) | Docker, Kubernetes, Docker Compose, GCP credentials, CI/CD |
 | [CONFIG.md](CONFIG.md) | API keys, environment variables, local setup |

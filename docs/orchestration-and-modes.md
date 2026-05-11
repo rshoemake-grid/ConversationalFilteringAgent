@@ -2,6 +2,8 @@
 
 Chat requests include a **`mode`** field. **`OrchestratorService`** routes to one of two orchestrators.
 
+For **step-by-step user journeys** (chips, load more, etc.) and **which external services each mode invokes**, read **[user-flow-and-services.md](user-flow-and-services.md)** first.
+
 ## `convo_commerce` (Approach A)
 
 - **Orchestrator:** `ConvoCommerceOrchestrator`

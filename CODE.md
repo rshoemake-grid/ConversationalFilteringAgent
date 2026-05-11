@@ -2,7 +2,7 @@
 
 Technical documentation for the Conversational Filtering Agent codebase.
 
-**Narrative guides** (how the system works end-to-end, especially **conversational search vs Retail Search**): see **[docs/README.md](docs/README.md)**.
+**Narrative guides** (how the system works end-to-end, especially **user flows and which services are called**): see **[docs/user-flow-and-services.md](docs/user-flow-and-services.md)** and the index **[docs/README.md](docs/README.md)**.
 
 ## Table of Contents
 
@@ -22,8 +22,8 @@ The application is a full-stack chat interface for Google's GCP Conversational C
 
 | Mode | Description |
 |------|-------------|
-| **convo_commerce** | GCP Conversational Commerce API is primary. Handles product search and follow-up questions. Routes general questions to an ADK specialist. |
-| **adk_orchestrator** | Google ADK (Agent Development Kit) orchestrates. Uses Conversational Commerce as a tool for product search, plus loyalty/recommendation tools. |
+| **convo_commerce** | **`ConversationalCommerceAdapter`**: Retail **conversationalSearch** plus **Retail Search** for products; optional enrichment and Vertex ranking. Default wiring does not use ADK/Gemini as the orchestrator. |
+| **adk_orchestrator** | **ADK `LlmAgent`** (Gemini) orchestrates; **ConversationalCommerceTool** calls **conversationalSearch**; **VaisrRetailProductResolver** loads products via **Retail Search**. Other tools may be configured on the agent. |
 
 ### Technology Stack
 

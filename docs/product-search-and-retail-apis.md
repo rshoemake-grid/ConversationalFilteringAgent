@@ -1,6 +1,6 @@
 # Product search and Retail APIs
 
-This document explains **how product lists are produced** and why you see **more than one Google Cloud call** for a single user message in **`convo_commerce`** mode.
+This document explains **how product lists are produced** and why you see **more than one Google Cloud call** for a single user message in **`convo_commerce`** mode. For a **user-journey-oriented** view (chips, load more, mode comparison), see **[user-flow-and-services.md](user-flow-and-services.md)**.
 
 ## Two different Retail capabilities
 

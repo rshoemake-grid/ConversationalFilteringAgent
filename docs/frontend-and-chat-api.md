@@ -1,5 +1,7 @@
 # Frontend and chat API
 
+For **end-to-end user journeys** and **which backend/GCP services run** on each action, see **[user-flow-and-services.md](user-flow-and-services.md)**.
+
 ## UI flow (summary)
 
 1. User sends text, picks a **suggested answer**, uses **voice** or **image**, or clicks **Load more** / **Get more suggestions**.
