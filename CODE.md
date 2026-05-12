@@ -127,6 +127,10 @@ frontend/src/
 
 ## API Reference
 
+Full **HTTP** documentation (all **`ChatRequest` / `ChatResponse`** fields, **`GET /api/models`**, error responses, Swagger links): **[docs/api-reference.md](docs/api-reference.md)**.
+
+Interactive spec when the server is running: **http://localhost:8080/swagger-ui/index.html** and **http://localhost:8080/v3/api-docs**.
+
 ### POST /api/chat
 
 Send a chat message. Supports text, image (base64), and multimodal.
@@ -159,19 +163,19 @@ Send a chat message. Supports text, image (base64), and multimodal.
 }
 ```
 
-**Validation:** Either `message` (non-blank) or `imageBase64` must be provided.
+**Validation:** At least one of `message` (non-blank), `imageBase64` (non-blank), or `productPageToken` (non-blank) must be provided. See **`docs/api-reference.md`** for the full request schema.
 
 ### GET /api/models
 
-Returns available Gemini models. Requires `GOOGLE_API_KEY`.
+Returns available Gemini models when configured. **503** with empty array if the service is unavailable.
 
-**Endpoints:**
+**Other URLs:**
 
 | Path | Purpose |
 |------|---------|
-| `/swagger-ui.html` | Swagger UI |
+| `/swagger-ui/index.html` | Swagger UI |
 | `/v3/api-docs` | OpenAPI JSON |
-| `/` | SPA `index.html` when `app.serve-frontend=true`, else redirect to Swagger |
+| `/` | SPA `index.html` when `app.serve-frontend=true`, else redirect to Swagger UI |
 
 ---
 

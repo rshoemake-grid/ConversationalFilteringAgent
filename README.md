@@ -81,11 +81,16 @@ cd backend
 
 ## API
 
-**REST API docs (Swagger UI):** http://localhost:8080/swagger-ui.html  
-**OpenAPI spec:** http://localhost:8080/v3/api-docs
+**Human-readable reference:** [docs/api-reference.md](docs/api-reference.md) (endpoints, fields, error shape).
 
-POST `/api/chat`:
+**Interactive docs (when the server is running):**
 
+| Resource | URL |
+|----------|-----|
+| **Swagger UI** | http://localhost:8080/swagger-ui/index.html |
+| **OpenAPI JSON** | http://localhost:8080/v3/api-docs |
+
+POST `/api/chat` (minimal example — full field list in **[docs/api-reference.md](docs/api-reference.md)**):
 ```json
 {
   "mode": "convo_commerce" | "adk_orchestrator",
@@ -111,6 +116,7 @@ Response:
 | Document | Description |
 |----------|-------------|
 | [docs/README.md](docs/README.md) | **Start here** — index of topic guides (GCP two-call flow, modes, frontend/API) |
+| [docs/api-reference.md](docs/api-reference.md) | **REST API** — `/api/chat`, `/api/models`, OpenAPI/Swagger, errors |
 | [docs/user-flow-and-services.md](docs/user-flow-and-services.md) | User flows and which services (Retail, Gemini, tools) run per mode |
 | [CODE.md](CODE.md) | Code architecture, API reference, data models, key flows |
 | [DEPLOY.md](DEPLOY.md) | Docker, Kubernetes, Docker Compose, GCP credentials, CI/CD |

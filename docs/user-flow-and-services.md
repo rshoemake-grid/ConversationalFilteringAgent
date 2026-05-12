@@ -110,6 +110,7 @@ If **no Gemini API key / ADC** is available, **`AdkOrchestrator`** returns a **p
 
 | Document | Use |
 |----------|-----|
+| [api-reference.md](api-reference.md) | **HTTP API** — `/api/chat`, `/api/models`, OpenAPI/Swagger, errors |
 | [system-overview.md](system-overview.md) | Diagram and layer summary |
 | [product-search-and-retail-apis.md](product-search-and-retail-apis.md) | Conversational vs product search, REST/gRPC, Product.get |
 | [orchestration-and-modes.md](orchestration-and-modes.md) | Class-level mode wiring |
@@ -117,4 +118,4 @@ If **no Gemini API key / ADC** is available, **`AdkOrchestrator`** returns a **p
 | [CONFIG.md](../CONFIG.md) | Credentials, placement, branch |
 | [CODE.md](../CODE.md) | Package layout and DTOs |
 
-Suggested reading order for new contributors: **system-overview** → **this page** → **product-search-and-retail-apis** → **frontend-and-chat-api**.
+Suggested reading order for new contributors: **system-overview** → **this page** → **api-reference** → **product-search-and-retail-apis** → **frontend-and-chat-api**.

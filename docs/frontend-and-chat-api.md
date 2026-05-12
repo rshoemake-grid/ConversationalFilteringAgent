@@ -1,5 +1,7 @@
 # Frontend and chat API
 
+For **HTTP** endpoint reference (**`ChatRequest` / `ChatResponse`** fields, Swagger): **[api-reference.md](api-reference.md)**.
+
 For **end-to-end user journeys** and **which backend/GCP services run** on each action, see **[user-flow-and-services.md](user-flow-and-services.md)**.
 
 ## UI flow (summary)

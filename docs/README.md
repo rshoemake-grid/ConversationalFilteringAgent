@@ -4,6 +4,7 @@ Narrative documentation for how the Conversational Filtering Agent works. Prefer
 
 | Document | What it covers |
 |----------|----------------|
+| [api-reference.md](api-reference.md) | **REST API** — endpoints, request/response fields, errors, OpenAPI/Swagger links |
 | [user-flow-and-services.md](user-flow-and-services.md) | **User journeys** (chips, load more, image) and **which services/APIs run** in each orchestration mode |
 | [system-overview.md](system-overview.md) | Stack, major components, end-to-end path from browser to Google Cloud |
 | [product-search-and-retail-apis.md](product-search-and-retail-apis.md) | **Why there are two GCP calls** (conversational vs product search), pagination, enrichment, transports |
@@ -19,4 +20,4 @@ Narrative documentation for how the Conversational Filtering Agent works. Prefer
 | [../CODE.md](../CODE.md) | Package layout, API shapes, configuration tables |
 | [../DEPLOY.md](../DEPLOY.md) | Docker, Kubernetes, CI |
 
-Suggested reading order: **system-overview** → **user-flow-and-services** → **product-search-and-retail-apis** → **orchestration-and-modes** → **frontend-and-chat-api**.
+Suggested reading order: **system-overview** → **user-flow-and-services** → **api-reference** → **product-search-and-retail-apis** → **orchestration-and-modes** → **frontend-and-chat-api**.

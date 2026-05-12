@@ -41,6 +41,7 @@ Placement, branch, project, transport (`rest` vs `grpc`), and credentials are de
 
 ## Deeper reading
 
+- **[api-reference.md](api-reference.md)** — REST endpoints, request/response tables, OpenAPI/Swagger URLs, errors.
 - **[user-flow-and-services.md](user-flow-and-services.md)** — user-visible flows (chips, pagination, image) and which GCP/Gemini calls happen in each mode.
 - **[product-search-and-retail-apis.md](product-search-and-retail-apis.md)** — the two-step GCP pattern (this is the detail behind “separate Retail Search call”).
 - **[orchestration-and-modes.md](orchestration-and-modes.md)** — how `mode` changes routing.
