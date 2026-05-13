@@ -2,6 +2,7 @@ package com.conversationalcommerce.agent.web;
 
 import com.conversationalcommerce.agent.agent.AgentResponse;
 import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
+import com.conversationalcommerce.agent.orchestration.LastFilteringQuestionStore;
 import com.conversationalcommerce.agent.orchestration.OrchestratorService;
 import com.conversationalcommerce.agent.orchestration.RetailProductApiGate;
 import com.conversationalcommerce.agent.web.ChatRequest.OrchestrationMode;
@@ -160,7 +161,7 @@ class ChatControllerTest {
         private boolean throwOnNext;
 
         StubOrchestratorService() {
-            super(null, null, stubGate());
+            super(null, null, stubGate(), new LastFilteringQuestionStore());
         }
 
         private static RetailProductApiGate stubGate() {

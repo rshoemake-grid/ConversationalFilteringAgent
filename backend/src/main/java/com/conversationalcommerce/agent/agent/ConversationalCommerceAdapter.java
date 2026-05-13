@@ -3,6 +3,7 @@ package com.conversationalcommerce.agent.agent;
 import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
 import com.conversationalcommerce.agent.gemini.ClarifyingQuestionGenerator;
 import com.conversationalcommerce.agent.orchestration.ContextUtils;
+import com.conversationalcommerce.agent.orchestration.LastFilteringQuestionStore;
 import com.conversationalcommerce.agent.ranking.VertexAiRankingService;
 import com.conversationalcommerce.agent.web.ChatRequest;
 import org.slf4j.Logger;
@@ -31,6 +32,7 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
     private final Optional<ClarifyingQuestionGenerator> clarifyingGenerator;
     private final ProductPoolNarrower productPoolNarrower;
     private final VertexAiRankingService vertexAiRankingService;
+    private final LastFilteringQuestionStore lastFilteringQuestionStore;
     private final InitialCatalogAggregator initialCatalogAggregator;
 
     public ConversationalCommerceAdapter(
@@ -40,6 +42,7 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             Optional<ClarifyingQuestionGenerator> clarifyingGenerator,
             ProductPoolNarrower productPoolNarrower,
             VertexAiRankingService vertexAiRankingService,
+            LastFilteringQuestionStore lastFilteringQuestionStore,
             InitialCatalogAggregator initialCatalogAggregator) {
         this.client = client;
         this.enrichmentService = enrichmentService;
@@ -47,6 +50,7 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
         this.clarifyingGenerator = clarifyingGenerator != null ? clarifyingGenerator : Optional.empty();
         this.productPoolNarrower = productPoolNarrower;
         this.vertexAiRankingService = vertexAiRankingService;
+        this.lastFilteringQuestionStore = lastFilteringQuestionStore;
         this.initialCatalogAggregator = initialCatalogAggregator;
     }
 
@@ -223,11 +227,16 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                                     m.getOrDefault("value", "")))
                             .toList()
                     : (suggestedAnswers != null ? suggestedAnswers.stream()
-                            .filter(sa -> !originalUserInput.trim().equals(sa.value() != null ? sa.value().trim() : ""))
+                            .filter(sa -> {
+                                String v = sa.value() != null ? sa.value().trim() : "";
+                                String d = sa.displayText() != null ? sa.displayText().trim() : "";
+                                return !originalUserInput.trim().equals(v)
+                                        && !originalUserInput.trim().equalsIgnoreCase(d);
+                            })
                             .toList() : List.of());
 
-            // When only one option remains, auto-run it instead of re-asking
-            if (storageTypeRecoveryNoProducts && remaining.size() == 1 && prevText != null && !prevText.isBlank()) {
+            // When only one storage option remains, auto-run it instead of re-asking (no previousAssistantText required).
+            if (storageTypeRecoveryNoProducts && remaining.size() == 1) {
                 String prevRefined = (String) context.get("previousRefinedQuery");
                 if (prevRefined != null && !prevRefined.isBlank()) {
                     String soleValue = remaining.get(0).value();
@@ -249,11 +258,17 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                             if (!autoProducts.isEmpty()) {
                                 int n = autoProducts.size();
                                 text = n == 1 ? "I found 1 product matching your request." : "I found " + n + " products matching your request.";
+                                productFilterUsed = stFilter;
+                                suggestedAnswers = List.of();
                             } else {
-                                text = "No products found.";
+                                String body = storageReaskBody(prevText, true, context);
+                                boolean already = body.contains("No products found for that option.");
+                                text = (storageTypeRecoveryNoProducts && !already)
+                                        ? "No products found for that option.\n\n" + body
+                                        : body;
+                                suggestedAnswers = remaining;
+                                productFilterUsed = stFilter;
                             }
-                            productFilterUsed = stFilter;
-                            suggestedAnswers = List.of();
                             responseSource = "app";
                             usedPreviousAgentFallback = true;
                         } catch (Exception e) {
@@ -263,11 +278,12 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                 }
             }
 
-            if (!usedPreviousAgentFallback && prevText != null && !prevText.isBlank()) {
-                boolean alreadyHasPrefix = prevText != null && prevText.contains("No products found for that option.");
+            if (!usedPreviousAgentFallback && !remaining.isEmpty()) {
+                String body = storageReaskBody(prevText, storageTypeRecoveryNoProducts, context);
+                boolean alreadyHasPrefix = body.contains("No products found for that option.");
                 text = (storageTypeRecoveryNoProducts && !alreadyHasPrefix)
-                        ? "No products found for that option.\n\n" + prevText
-                        : prevText;
+                        ? "No products found for that option.\n\n" + body
+                        : body;
                 suggestedAnswers = remaining;
                 responseSource = "app";
                 usedPreviousAgentFallback = true;
@@ -585,6 +601,23 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             "ANY", "NO", "NONE", "NOPREFERENCE", "DON'T CARE", "DONT CARE", "DOESN'T MATTER",
             "DOESNT MATTER", "WHATEVER", "I DON'T CARE", "IDC"
     );
+
+    private String storageReaskBody(String prevText, boolean storageRecovery, Map<String, Object> context) {
+        if (prevText != null && !prevText.isBlank()) {
+            return prevText.trim();
+        }
+        if (storageRecovery) {
+            if (lastFilteringQuestionStore != null && context != null) {
+                String key = ContextUtils.getSessionKey(context);
+                var stored = lastFilteringQuestionStore.getLastQuestion(key);
+                if (stored.isPresent()) {
+                    return stored.get();
+                }
+            }
+            return ClarifyingFollowUpPolicy.DEFAULT_STORAGE_CLARIFYING_REASK;
+        }
+        return "What would you like to try next?";
+    }
 
     private static boolean isNoPreference(String input) {
         if (input == null || input.isBlank()) return false;

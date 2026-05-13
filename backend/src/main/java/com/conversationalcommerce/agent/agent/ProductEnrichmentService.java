@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -15,8 +16,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Enriches products with missing description or price by calling Product.Get.
- * Only runs when ProductFetcher is available (REST transport).
+ * Enriches products with missing description, price, or attributes by calling Product.Get.
+ * Runs when {@link ProductFetcher} is available (HTTP Product.Get; active for both REST and gRPC search).
  * Fetches run in parallel (bounded pool, same cap scale as {@link InitialCatalogAggregator}) so large
  * initial catalogs do not block the chat response for many minutes.
  */
@@ -92,7 +93,9 @@ public class ProductEnrichmentService {
         }
         boolean missingDesc = p.description() == null || p.description().isBlank();
         boolean missingPrice = p.price() == null || p.price().isBlank();
-        return missingDesc || missingPrice;
+        // Search often returns attributes: null; facets (e.g. stockType) are needed for filtering and display.
+        boolean missingAttributes = p.attributes() == null || p.attributes().isEmpty();
+        return missingDesc || missingPrice || missingAttributes;
     }
 
     private static AgentResponse.ProductResult merge(AgentResponse.ProductResult fromSearch, AgentResponse.ProductResult fromGet) {
@@ -109,7 +112,10 @@ public class ProductEnrichmentService {
         String availability = fromSearch.availability() != null ? fromSearch.availability() : fromGet.availability();
         var sizes = fromSearch.sizes() != null ? fromSearch.sizes() : fromGet.sizes();
         var materials = fromSearch.materials() != null ? fromSearch.materials() : fromGet.materials();
-        var attributes = fromSearch.attributes() != null ? fromSearch.attributes() : fromGet.attributes();
+        Map<String, Object> attributes = fromSearch.attributes();
+        if (attributes == null || attributes.isEmpty()) {
+            attributes = fromGet.attributes();
+        }
         return new AgentResponse.ProductResult(
                 fromSearch.id(),
                 fromSearch.title(),

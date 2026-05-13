@@ -4,7 +4,6 @@ import com.conversationalcommerce.agent.config.GcpCredentialsProvider;
 import com.google.auth.oauth2.GoogleCredentials;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
@@ -15,10 +14,10 @@ import java.util.Optional;
 
 /**
  * REST-based Product.Get for enriching search results with missing fields.
- * Active when transport=rest.
+ * Registered regardless of {@code conversational-commerce.transport}: gRPC search still needs HTTP Product.Get
+ * when search payloads omit attributes.
  */
 @Component
-@ConditionalOnExpression("@environment.getProperty('conversational-commerce.transport', 'rest') == 'rest'")
 public class RetailProductFetcherRest implements ProductFetcher {
 
     private static final Logger log = LoggerFactory.getLogger(RetailProductFetcherRest.class);

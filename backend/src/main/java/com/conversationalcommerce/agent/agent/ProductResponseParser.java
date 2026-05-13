@@ -28,7 +28,7 @@ final class ProductResponseParser {
         String availability = product.containsKey("availability") ? String.valueOf(product.get("availability")) : null;
         List<String> sizes = getStringList(product, "sizes");
         List<String> materials = getStringList(product, "materials");
-        Map<String, Object> attributes = parseAttributes(product);
+        Map<String, Object> attributes = parseAttributesWithVariantFallback(product);
         return new AgentResponse.ProductResult(
                 id, title, desc, price, imageUri,
                 gtin, productId, categories, brands, uri, availability, sizes, materials, attributes, detailsFetched);
@@ -143,21 +143,61 @@ final class ProductResponseParser {
         return null;
     }
 
+    /**
+     * Search payloads often omit product-level {@code attributes} (null) while the same keys exist on the first variant.
+     */
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> parseAttributes(Map<String, Object> product) {
-        if (!product.containsKey("attributes") || !(product.get("attributes") instanceof Map<?, ?> attrs))
+    private static Map<String, Object> parseAttributesWithVariantFallback(Map<String, Object> product) {
+        Map<String, Object> fromProduct = parseAttributeMap(product);
+        if (fromProduct != null) {
+            return fromProduct;
+        }
+        if (product.containsKey("variants") && product.get("variants") instanceof List<?> variants && !variants.isEmpty()) {
+            Object first = variants.get(0);
+            if (first instanceof Map<?, ?> v) {
+                return parseAttributeMap((Map<String, Object>) v);
+            }
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> parseAttributeMap(Map<String, Object> map) {
+        if (map == null || !map.containsKey("attributes") || !(map.get("attributes") instanceof Map<?, ?> attrs)) {
             return null;
+        }
         Map<String, Object> out = new HashMap<>();
         for (Map.Entry<String, Object> e : ((Map<String, Object>) attrs).entrySet()) {
             Object val = e.getValue();
             if (val instanceof Map<?, ?> m) {
-                if (m.containsKey("text") && m.get("text") instanceof List<?> textList && !textList.isEmpty()) {
-                    out.put(e.getKey(), String.valueOf(textList.get(0)));
-                } else if (m.containsKey("numbers") && m.get("numbers") instanceof List<?> numList && !numList.isEmpty()) {
-                    out.put(e.getKey(), numList.get(0));
-                }
+                putCustomAttributeEntry(e.getKey(), m, out);
             }
         }
         return out.isEmpty() ? null : out;
+    }
+
+    /** Normalizes Retail {@link CustomAttribute} JSON: usually text/numbers arrays; some payloads use scalar strings/numbers. */
+    private static void putCustomAttributeEntry(String key, Map<?, ?> m, Map<String, Object> out) {
+        if (m.containsKey("text")) {
+            Object t = m.get("text");
+            if (t instanceof List<?> textList && !textList.isEmpty()) {
+                out.put(key, String.valueOf(textList.get(0)));
+                return;
+            }
+            if (t instanceof String s && !s.isBlank()) {
+                out.put(key, s);
+                return;
+            }
+        }
+        if (m.containsKey("numbers")) {
+            Object n = m.get("numbers");
+            if (n instanceof List<?> numList && !numList.isEmpty()) {
+                out.put(key, numList.get(0));
+                return;
+            }
+            if (n instanceof Number num) {
+                out.put(key, num);
+            }
+        }
     }
 }

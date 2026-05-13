@@ -511,6 +511,45 @@ describe('useChat', () => {
     expect(thirdCall.previousRefinedQuery).toBe('rice')
   })
 
+  it('adds filterable attribute names to raw response history when all chips exhaust with no products', async () => {
+    const send = vi.mocked(chatApi.sendChatMessage)
+    const raw = JSON.stringify({
+      conversationalFilteringResult: {
+        suggestedAnswers: [
+          { productAttributeValue: { name: 'attributes.stockType', value: 'S' } },
+          { productAttributeValue: { name: 'attributes.stockType', value: 'R' } },
+        ],
+      },
+    })
+    const chipResponse = {
+      text: 'No products found.',
+      conversationId: 'c1',
+      refinedQuery: 'rice',
+      suggestedAnswers: [
+        { displayText: 'Ambient', value: 'S' },
+        { displayText: 'Refrigerated', value: 'R' },
+      ],
+      rawResponse: raw,
+      products: [] as const,
+    }
+    send.mockResolvedValueOnce(chipResponse).mockResolvedValueOnce(chipResponse).mockResolvedValueOnce(chipResponse)
+
+    const { result } = renderHook(() => useChat())
+    act(() => result.current.setInput('rice'))
+    await act(async () => result.current.handleSend())
+
+    act(() => result.current.handleSuggestedAnswer({ displayText: 'Ambient', value: 'S' }))
+    await act(async () => {})
+
+    act(() => result.current.handleSuggestedAnswer({ displayText: 'Refrigerated', value: 'R' }))
+    await act(async () => {})
+
+    expect(send).toHaveBeenCalledTimes(3)
+    const lastRaw = result.current.rawResponseHistory[2]
+    expect(lastRaw.exhaustedSuggestedChipsNoProducts).toBe(true)
+    expect(lastRaw.filterableAttributeNamesFromRaw).toEqual(['attributes.stockType'])
+  })
+
   it('startNewConversation clears messages, conversationId, input, and pending image', async () => {
     vi.mocked(chatApi.sendChatMessage).mockResolvedValue({
       text: 'Hi!',

@@ -4,6 +4,10 @@ import type { ChatResponse } from '../api/types';
 interface HistoryEntry {
   rawResponse?: string | null;
   fallbackResponse?: ChatResponse | null;
+  /** True when every suggested chip for this response was tried and returned no products */
+  exhaustedSuggestedChipsNoProducts?: boolean;
+  /** Unique productAttributeValue.name values parsed from raw (e.g. attributes.brands) */
+  filterableAttributeNamesFromRaw?: string[];
 }
 
 interface RawResponsePanelProps {
@@ -19,9 +23,27 @@ function prettyPrintJson(raw: string): string {
   }
 }
 
+function formatFilterableHint(entry: HistoryEntry): string | null {
+  if (!entry.exhaustedSuggestedChipsNoProducts) return null;
+  const names = entry.filterableAttributeNamesFromRaw;
+  const lines: string[] = [
+    '=== Suggested chips exhausted (no products) — filterable attribute names from raw JSON ===',
+  ];
+  if (names && names.length > 0) {
+    for (const n of names) lines.push(`- ${n}`);
+  } else {
+    lines.push(
+      '(No productAttributeValue.name on suggestions in this raw payload — chips may use unnamed facets; see Raw GCP JSON below.)'
+    );
+  }
+  return lines.join('\n');
+}
+
 /** Show full raw GCP API response (all attributes) first, then our processed response. */
 function formatEntry(entry: HistoryEntry): string {
   const parts: string[] = [];
+  const hint = formatFilterableHint(entry);
+  if (hint) parts.push(hint);
   // Raw GCP API response - contains all available attributes (conversationalSearchResult, conversationalFilteringResult, suggestedAnswers with productAttributeValue, etc.)
   if (entry.rawResponse?.trim()) {
     parts.push('=== Raw GCP API Response ===\n' + prettyPrintJson(entry.rawResponse));

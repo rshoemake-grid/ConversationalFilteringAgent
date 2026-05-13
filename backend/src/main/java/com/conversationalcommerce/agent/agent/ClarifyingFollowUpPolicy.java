@@ -10,6 +10,11 @@ import java.util.Set;
  */
 public final class ClarifyingFollowUpPolicy {
 
+    /**
+     * Re-ask line when a storage chip returns no hits and the client did not echo prior assistant wording.
+     */
+    public static final String DEFAULT_STORAGE_CLARIFYING_REASK = "What type of stock do you prefer?";
+
     private static final Set<String> STORAGE_TYPE_VALUES = Set.of(
             "FROZEN", "REFRIGERATED", "AMBIENT", "DRY_STORAGE", "F", "C", "S", "R", "D", "N"
     );

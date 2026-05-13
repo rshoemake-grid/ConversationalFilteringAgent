@@ -25,7 +25,8 @@ class OrchestratorServiceTest {
         orchestratorService = new OrchestratorService(
                 new ConvoCommerceOrchestratorWrapper(convoOrchestrator),
                 new AdkOrchestrator(null, adkOrchestrator),
-                new RetailProductApiGate(cc)
+                new RetailProductApiGate(cc),
+                new LastFilteringQuestionStore()
         );
     }
 

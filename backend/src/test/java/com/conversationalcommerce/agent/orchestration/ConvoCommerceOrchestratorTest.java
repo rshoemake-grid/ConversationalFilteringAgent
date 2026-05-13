@@ -37,7 +37,7 @@ class ConvoCommerceOrchestratorTest {
         config.setInitialCatalogParallelPageFetches(false);
         config.setRetailSingleShotPerConversation(false);
         var gate = new RetailProductApiGate(config);
-        var adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.empty(), new ProductPoolNarrower(), null, new InitialCatalogAggregator(stubSearchClient, config, gate));
+        var adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.empty(), new ProductPoolNarrower(), null, null, new InitialCatalogAggregator(stubSearchClient, config, gate));
         orchestrator = new ConvoCommerceOrchestrator(adapter);
     }
 

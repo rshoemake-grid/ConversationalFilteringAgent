@@ -162,4 +162,63 @@ class RetailSearchClientRestTest {
         assertThat(p.description()).isEqualTo("Blue cotton tee");
         assertThat(p.productId()).isEqualTo("varied");
     }
+
+    @Test
+    void parseResponse_readsAttributesFromFirstVariantWhenProductLevelAttributesAbsent() {
+        String json = """
+            {
+              "results": [
+                {
+                  "product": {
+                    "name": "projects/p/locations/global/catalogs/c/branches/b/products/sku-9",
+                    "title": "Item",
+                    "variants": [
+                      {
+                        "attributes": {
+                          "stockType": {"text": ["REFRIGERATED"]},
+                          "color": {"text": ["Red"]}
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+            """;
+        var client = new RetailSearchClientRest((GcpCredentialsProvider) null, new ConversationalCommerceConfig());
+        @SuppressWarnings("unchecked")
+        List<AgentResponse.ProductResult> results = (List<AgentResponse.ProductResult>)
+                ReflectionTestUtils.invokeMethod(client, "parseResponse", json);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).attributes())
+                .containsEntry("stockType", "REFRIGERATED")
+                .containsEntry("color", "Red");
+    }
+
+    @Test
+    void parseResponse_readsAttributesWhenTextIsScalarString() {
+        String json = """
+            {
+              "results": [
+                {
+                  "product": {
+                    "name": "projects/p/locations/global/catalogs/c/branches/b/products/sku-scalar",
+                    "title": "Scalar attrs",
+                    "attributes": {
+                      "legacyKey": {"text": "plain-string-not-array"}
+                    }
+                  }
+                }
+              ]
+            }
+            """;
+        var client = new RetailSearchClientRest((GcpCredentialsProvider) null, new ConversationalCommerceConfig());
+        @SuppressWarnings("unchecked")
+        List<AgentResponse.ProductResult> results = (List<AgentResponse.ProductResult>)
+                ReflectionTestUtils.invokeMethod(client, "parseResponse", json);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).attributes()).containsEntry("legacyKey", "plain-string-not-array");
+    }
 }

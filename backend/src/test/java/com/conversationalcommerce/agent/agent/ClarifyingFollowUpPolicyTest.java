@@ -41,6 +41,11 @@ class ClarifyingFollowUpPolicyTest {
     }
 
     @Test
+    void defaultStorageClarifyingReask_isStockQuestion() {
+        assertThat(ClarifyingFollowUpPolicy.DEFAULT_STORAGE_CLARIFYING_REASK).contains("stock");
+    }
+
+    @Test
     void clarifyingQuestionImpliesStorageChoice_detectsStockAndStorageWording() {
         assertThat(ClarifyingFollowUpPolicy.clarifyingQuestionImpliesStorageChoice("What type of stock do you prefer?"))
                 .isTrue();

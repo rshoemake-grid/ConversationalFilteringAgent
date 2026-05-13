@@ -31,6 +31,7 @@ class VaisrRetailProductResolverTest {
 
     ConversationalCommerceConfig config = new ConversationalCommerceConfig();
     InitialCatalogAggregator aggregator;
+    LastFilteringQuestionStore lastQuestionStore;
     VaisrRetailProductResolver resolver;
 
     @BeforeEach
@@ -42,11 +43,13 @@ class VaisrRetailProductResolverTest {
         config.setRetailSingleShotPerConversation(false);
         var gate = new RetailProductApiGate(config);
         aggregator = new InitialCatalogAggregator(searchClient, config, gate);
+        lastQuestionStore = new LastFilteringQuestionStore();
         resolver = new VaisrRetailProductResolver(
                 aggregator,
                 new ProductEnrichmentService(Optional.empty(), config),
                 config,
-                Optional.empty());
+                Optional.empty(),
+                lastQuestionStore);
     }
 
     @Test
@@ -119,6 +122,65 @@ class VaisrRetailProductResolverTest {
         assertThat(aug.suggestedAnswersOverride())
                 .extracting(ConversationalCommerceClient.SuggestedAnswer::value)
                 .containsExactlyInAnyOrder("S", "R");
+    }
+
+    @Test
+    void storageRecoveryWithNoProducts_withoutPreviousAssistantText_usesStoredQuestionWhenAvailable() {
+        when(searchClient.searchWithPagination(
+                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"DRY_STORAGE\")"), eq(null), any(), eq(null)))
+                .thenReturn(SearchResult.of(List.of(), null, 0));
+
+        lastQuestionStore.rememberFromResponse("v1", AgentResponse.builder()
+                .text("x")
+                .conversationId("c")
+                .clarifyingQuestion("Which storage condition should we use?")
+                .build());
+
+        var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(
+                "No products found.", "c-gcp", "rice", "INTENT_REFINEMENT", "agent", "{}", List.of());
+        var ctx = Map.<String, Object>of(
+                "visitorId", "v1",
+                "previousRefinedQuery", "rice",
+                "previousSuggestedAnswers",
+                List.of(
+                        Map.of("displayText", "Ambient", "value", "S"),
+                        Map.of("displayText", "Dry storage", "value", "D")));
+
+        VaisrRetailProductResolver.Augmentation aug = resolver.resolve(vaisr, "D", ctx);
+
+        assertThat(aug.products()).isEmpty();
+        assertThat(aug.text()).contains("Which storage condition should we use?");
+        assertThat(aug.text()).doesNotContain("What type of stock do you prefer?");
+        assertThat(aug.text()).contains("No products found for that option.");
+        assertThat(aug.suggestedAnswersOverride()).isNotNull();
+        assertThat(aug.suggestedAnswersOverride()).extracting(ConversationalCommerceClient.SuggestedAnswer::value)
+                .containsExactly("S");
+    }
+
+    @Test
+    void storageRecoveryWithNoProducts_withoutPreviousAssistantText_usesDefaultWhenStoreEmpty() {
+        when(searchClient.searchWithPagination(
+                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"DRY_STORAGE\")"), eq(null), any(), eq(null)))
+                .thenReturn(SearchResult.of(List.of(), null, 0));
+
+        var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(
+                "No products found.", "c-gcp", "rice", "INTENT_REFINEMENT", "agent", "{}", List.of());
+        var ctx = Map.<String, Object>of(
+                "visitorId", "v1",
+                "previousRefinedQuery", "rice",
+                "previousSuggestedAnswers",
+                List.of(
+                        Map.of("displayText", "Ambient", "value", "S"),
+                        Map.of("displayText", "Dry storage", "value", "D")));
+
+        VaisrRetailProductResolver.Augmentation aug = resolver.resolve(vaisr, "D", ctx);
+
+        assertThat(aug.products()).isEmpty();
+        assertThat(aug.text()).contains("What type of stock do you prefer?");
+        assertThat(aug.text()).contains("No products found for that option.");
+        assertThat(aug.suggestedAnswersOverride()).isNotNull();
+        assertThat(aug.suggestedAnswersOverride()).extracting(ConversationalCommerceClient.SuggestedAnswer::value)
+                .containsExactly("S");
     }
 
     @Test

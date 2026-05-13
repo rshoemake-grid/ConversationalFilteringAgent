@@ -21,4 +21,22 @@ public final class ContextUtils {
         }
         return defaultVisitorId != null ? defaultVisitorId : DEFAULT_USER_PREFIX + System.currentTimeMillis();
     }
+
+    /**
+     * Chat session key for server-side per-session state (matches {@link OrchestratorService} context).
+     */
+    public static String getSessionKey(Map<String, Object> context) {
+        if (context == null) {
+            return "";
+        }
+        Object sid = context.get("sessionId");
+        if (sid != null && !sid.toString().isBlank()) {
+            return sid.toString().trim();
+        }
+        Object vid = context.get("visitorId");
+        if (vid != null && !vid.toString().isBlank()) {
+            return vid.toString().trim();
+        }
+        return "";
+    }
 }

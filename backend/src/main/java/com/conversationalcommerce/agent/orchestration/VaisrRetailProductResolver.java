@@ -49,16 +49,19 @@ public class VaisrRetailProductResolver {
     private final ProductEnrichmentService enrichmentService;
     private final ConversationalCommerceConfig config;
     private final Optional<ClarifyingQuestionGenerator> clarifyingGenerator;
+    private final LastFilteringQuestionStore lastFilteringQuestionStore;
 
     public VaisrRetailProductResolver(
             InitialCatalogAggregator initialCatalogAggregator,
             ProductEnrichmentService enrichmentService,
             ConversationalCommerceConfig config,
-            Optional<ClarifyingQuestionGenerator> clarifyingGenerator) {
+            Optional<ClarifyingQuestionGenerator> clarifyingGenerator,
+            LastFilteringQuestionStore lastFilteringQuestionStore) {
         this.initialCatalogAggregator = initialCatalogAggregator;
         this.enrichmentService = enrichmentService;
         this.config = config;
         this.clarifyingGenerator = clarifyingGenerator != null ? clarifyingGenerator : Optional.empty();
+        this.lastFilteringQuestionStore = lastFilteringQuestionStore;
     }
 
     /**
@@ -169,13 +172,17 @@ public class VaisrRetailProductResolver {
                             .toList()
                     : (result.suggestedAnswers() != null
                             ? result.suggestedAnswers().stream()
-                                    .filter(sa -> !originalUserInput.trim().equals(
-                                            sa.value() != null ? sa.value().trim() : ""))
+                                    .filter(sa -> {
+                                        String v = sa.value() != null ? sa.value().trim() : "";
+                                        String d = sa.displayText() != null ? sa.displayText().trim() : "";
+                                        return !originalUserInput.trim().equals(v)
+                                                && !originalUserInput.trim().equalsIgnoreCase(d);
+                                    })
                                     .toList()
                             : List.of());
 
             boolean usedStorageReaskFallback = false;
-            if (remaining.size() == 1 && prevText != null && !prevText.isBlank()) {
+            if (remaining.size() == 1) {
                 String prevRefined = (String) context.get("previousRefinedQuery");
                 if (prevRefined != null && !prevRefined.isBlank()) {
                     ConversationalCommerceClient.SuggestedAnswer sole = remaining.get(0);
@@ -202,9 +209,13 @@ public class VaisrRetailProductResolver {
                                         : "I found " + n + " products matching your request.";
                                 searchResult = SearchResult.of(autoProducts, null, Math.max((long) n, 1L));
                             } else {
-                                text = "No products found.";
+                                String body = storageReaskBody(prevText, context);
+                                boolean already = body.contains("No products found for that option.");
+                                text = !already
+                                        ? "No products found for that option.\n\n" + body
+                                        : body;
+                                suggestedAnswersOverride = List.copyOf(applyStorageTypeDisplayMapping(remaining));
                             }
-                            suggestedAnswersOverride = List.of();
                             usedStorageReaskFallback = true;
                         } catch (Exception e) {
                             log.warn("Auto-run last storage option failed: {}", e.getMessage());
@@ -213,16 +224,14 @@ public class VaisrRetailProductResolver {
                 }
             }
 
-            if (!usedStorageReaskFallback && prevText != null && !prevText.isBlank()) {
-                boolean alreadyHasPrefix = prevText.contains("No products found for that option.");
+            if (!usedStorageReaskFallback && !remaining.isEmpty()) {
+                String body = storageReaskBody(prevText, context);
+                boolean alreadyHasPrefix = body.contains("No products found for that option.");
                 text = !alreadyHasPrefix
-                        ? "No products found for that option.\n\n" + prevText
-                        : prevText;
+                        ? "No products found for that option.\n\n" + body
+                        : body;
                 suggestedAnswersOverride = List.copyOf(applyStorageTypeDisplayMapping(remaining));
                 usedStorageReaskFallback = true;
-            } else if (!usedStorageReaskFallback && !remaining.isEmpty()) {
-                text = "No products found for that option.\n\nWhat would you like to try next?";
-                suggestedAnswersOverride = List.copyOf(applyStorageTypeDisplayMapping(remaining));
             } else if (!usedStorageReaskFallback) {
                 text = "No products found.";
             }
@@ -393,6 +402,19 @@ public class VaisrRetailProductResolver {
             }
         }
         return null;
+    }
+
+    private String storageReaskBody(String prevText, Map<String, Object> context) {
+        if (prevText != null && !prevText.isBlank()) {
+            return prevText.trim();
+        }
+        if (lastFilteringQuestionStore != null && context != null) {
+            var stored = lastFilteringQuestionStore.getLastQuestion(ContextUtils.getSessionKey(context));
+            if (stored.isPresent()) {
+                return stored.get();
+            }
+        }
+        return ClarifyingFollowUpPolicy.DEFAULT_STORAGE_CLARIFYING_REASK;
     }
 
     private static boolean isNoPreference(String input) {

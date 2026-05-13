@@ -92,12 +92,80 @@ class ProductEnrichmentServiceTest {
         };
         var service = new ProductEnrichmentService(Optional.of(fetcher), cfg());
         var products = List.of(
-                AgentResponse.ProductResult.of("p1", "Full Product", "Has desc", "$10", null)
+                new AgentResponse.ProductResult(
+                        "p1",
+                        "Full Product",
+                        "Has desc",
+                        "$10",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        java.util.Map.of("keep", "on-search"),
+                        false)
         );
         var result = service.enrich(products);
         assertThat(result).hasSize(1);
         assertThat(result.get(0).detailsFetched()).isFalse();
         assertThat(callCount[0]).isZero();
+    }
+
+    @Test
+    void enrich_fetchesProductGetWhenAttributesMissingEvenIfDescAndPricePresent() {
+        var fetcher = new ProductFetcher() {
+            @Override
+            public Optional<AgentResponse.ProductResult> getProduct(String productName) {
+                if ("projects/p/products/sku-enrich-attrs".equals(productName)) {
+                    return Optional.of(new AgentResponse.ProductResult(
+                            productName,
+                            "T",
+                            "from get",
+                            "$9",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            java.util.Map.of("stockType", "AMBIENT"),
+                            true
+                    ));
+                }
+                return Optional.empty();
+            }
+        };
+        var service = new ProductEnrichmentService(Optional.of(fetcher), cfg());
+        var products = List.of(
+                new AgentResponse.ProductResult(
+                        "projects/p/products/sku-enrich-attrs",
+                        "T",
+                        "Has desc",
+                        "$9",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        false)
+        );
+        var result = service.enrich(products);
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).attributes()).containsEntry("stockType", "AMBIENT");
+        assertThat(result.get(0).detailsFetched()).isTrue();
+        assertThat(result.get(0).description()).isEqualTo("Has desc");
     }
 
     @Test

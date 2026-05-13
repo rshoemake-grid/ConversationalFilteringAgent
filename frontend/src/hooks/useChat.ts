@@ -9,6 +9,7 @@ import {
 } from '../utils/suggestedAnswerDisplay';
 import { shouldSuppressSuggestedAnswersWhenIngestingResponse } from '../utils/suggestionVisibility';
 import { stripSuggestionEchoLinesFromAssistantText } from '../utils/stripSuggestionEchoes';
+import { extractFilterableAttributeNamesFromRaw } from '../utils/extractFilterableAttributesFromRaw';
 
 /** Persisted across browser sessions (Approach A vs B). */
 export const ORCHESTRATION_MODE_STORAGE_KEY = 'cfa.orchestrationMode';
@@ -295,6 +296,24 @@ function extractSuggestedAnswersFromRaw(rawJson: string | null | undefined): str
   return results;
 }
 
+/** Suggested-answer list as returned by API (or parsed from raw) before client-side failed-chip filtering */
+function suggestedAnswersForExhaustionCheck(response: ChatResponse): SuggestedAnswer[] {
+  if (Array.isArray(response.suggestedAnswers) && response.suggestedAnswers.length > 0) {
+    return response.suggestedAnswers;
+  }
+  if (response.rawResponse) {
+    const extracted = extractSuggestedAnswersFromRaw(response.rawResponse);
+    return extracted.map((v) => {
+      const sa: SuggestedAnswer = {
+        displayText: looksLikeBrandCode(v) ? toTitleCase(v) : v,
+        value: v,
+      };
+      return { ...sa, displayText: suggestedAnswerDisplayLabel(sa) };
+    });
+  }
+  return [];
+}
+
 const DEFAULT_MAX_SUGGESTED_ANSWERS = 8;
 const MAX_SUGGESTED_ANSWERS_CAP = 50;
 const DEFAULT_PRODUCT_PAGE_SIZE = 20;
@@ -314,7 +333,14 @@ export function useChat() {
   const [maxSuggestedAnswers, setMaxSuggestedAnswers] = useState(DEFAULT_MAX_SUGGESTED_ANSWERS);
   const [productPageSize, setProductPageSize] = useState(DEFAULT_PRODUCT_PAGE_SIZE);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [rawResponseHistory, setRawResponseHistory] = useState<Array<{ rawResponse?: string | null; fallbackResponse?: ChatResponse | null }>>([]);
+  const [rawResponseHistory, setRawResponseHistory] = useState<
+    Array<{
+      rawResponse?: string | null;
+      fallbackResponse?: ChatResponse | null;
+      exhaustedSuggestedChipsNoProducts?: boolean;
+      filterableAttributeNamesFromRaw?: string[];
+    }>
+  >([]);
   const [input, setInput] = useState('');
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [voiceOutputEnabled, setVoiceOutputEnabled] = useState(false);
@@ -416,9 +442,20 @@ export function useChat() {
           (response.text ?? '').includes('?')
         );
 
+        let rawHistoryAugment: {
+          exhaustedSuggestedChipsNoProducts?: boolean;
+          filterableAttributeNamesFromRaw?: string[];
+        } = {};
+
         setMessages((prev) => {
           const lastMsg = prev[prev.length - 1];
-          const lastUserContent = lastMsg?.role === 'user' ? lastMsg.content?.trim() : null;
+          /** Prefer the user bubble text; when updates batch oddly, use the chip value sent this turn */
+          const lastUserContent =
+            lastMsg?.role === 'user'
+              ? lastMsg.content?.trim() ?? null
+              : options?.fromSuggestedAnswer && messageText?.trim()
+                ? messageText.trim()
+                : null;
           const prevAssistant = [...prev].reverse().find((m) => m.role === 'assistant' && !m.isError);
           const prevAssistantContent = prevAssistant?.content?.trim() ?? '';
           const responseText = (response.text ?? '').trim();
@@ -470,6 +507,7 @@ export function useChat() {
             suggestedAnswers,
           };
           if (options?.appendProductsToMessageId && response.products && response.products.length > 0) {
+            rawHistoryAugment = {};
             return prev.map((m) => {
               if (m.id !== options.appendProductsToMessageId || m.role !== 'assistant') return m;
               const merged = { ...m, products: [...(m.products ?? []), ...response.products!] };
@@ -480,9 +518,32 @@ export function useChat() {
               return merged;
             });
           }
+
+          const baseForExhaustion = suggestedAnswersForExhaustionCheck(response);
+          const chipsExhausted =
+            noProducts &&
+            options?.fromSuggestedAnswer === true &&
+            baseForExhaustion.length > 0 &&
+            baseForExhaustion.every((sa) => isSuggestedAnswerExcluded(sa, failedSet));
+          rawHistoryAugment = {
+            exhaustedSuggestedChipsNoProducts: chipsExhausted,
+            filterableAttributeNamesFromRaw:
+              chipsExhausted && response.rawResponse
+                ? extractFilterableAttributeNamesFromRaw(response.rawResponse)
+                : undefined,
+          };
+
           return [...prev, createAssistantMessage(filteredResponse, { suppressSuggestionChips })];
         });
-        setRawResponseHistory((prev) => [...prev, { rawResponse: response.rawResponse ?? null, fallbackResponse: response }]);
+
+        setRawResponseHistory((prev) => [
+          ...prev,
+          {
+            rawResponse: response.rawResponse ?? null,
+            fallbackResponse: response,
+            ...rawHistoryAugment,
+          },
+        ]);
         if (voiceOutputEnabled && (response.text?.trim() || response.clarifyingQuestion?.trim())) {
           const fullText = [response.text?.trim(), response.clarifyingQuestion?.trim()].filter(Boolean).join(' ');
           speak(fullText);

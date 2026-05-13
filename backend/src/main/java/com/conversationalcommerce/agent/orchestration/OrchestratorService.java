@@ -15,12 +15,15 @@ public class OrchestratorService {
     private final ChatOrchestrator convoCommerceOrchestrator;
     private final ChatOrchestrator adkOrchestrator;
     private final RetailProductApiGate retailProductApiGate;
+    private final LastFilteringQuestionStore lastFilteringQuestionStore;
 
     public OrchestratorService(ConvoCommerceOrchestrator convoCommerceOrchestrator, AdkOrchestrator adkOrchestrator,
-                               RetailProductApiGate retailProductApiGate) {
+                               RetailProductApiGate retailProductApiGate,
+                               LastFilteringQuestionStore lastFilteringQuestionStore) {
         this.convoCommerceOrchestrator = convoCommerceOrchestrator;
         this.adkOrchestrator = adkOrchestrator;
         this.retailProductApiGate = retailProductApiGate;
+        this.lastFilteringQuestionStore = lastFilteringQuestionStore;
     }
 
     public AgentResponse process(ChatRequest.OrchestrationMode mode, String message, String conversationId, String sessionId,
@@ -64,10 +67,14 @@ public class OrchestratorService {
 
         retailProductApiGate.beginChatTurn(conversationId, sessionId);
         try {
-            return switch (mode) {
+            AgentResponse response = switch (mode) {
                 case convo_commerce -> convoCommerceOrchestrator.process(message, conversationId, context);
                 case adk_orchestrator -> adkOrchestrator.process(message, conversationId, context);
             };
+            if (sessionId != null && !sessionId.isBlank()) {
+                lastFilteringQuestionStore.rememberFromResponse(sessionId.trim(), response);
+            }
+            return response;
         } finally {
             retailProductApiGate.endChatTurn();
         }
