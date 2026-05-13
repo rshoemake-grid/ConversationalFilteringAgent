@@ -1,6 +1,7 @@
 import { memo, useState, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { ProductDto } from '../api/types';
+import { clampPopoverCenterX, VIEWPORT_MARGIN } from '../utils/productCardPopoverPlacement';
 
 interface ProductCardProps {
   product: ProductDto;
@@ -18,7 +19,9 @@ function ProductCardComponent({ product: p, index }: ProductCardProps) {
   const hasImage = !!p.imageUri;
   const [isHovered, setIsHovered] = useState(false);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  const [popoverPlacement, setPopoverPlacement] = useState<{ left: number; bottom: number } | null>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     if (!isHovered || !anchorRef.current) {
@@ -41,6 +44,52 @@ function ProductCardComponent({ product: p, index }: ProductCardProps) {
     return () => window.removeEventListener('scroll', update, true);
   }, [isHovered]);
 
+  useLayoutEffect(() => {
+    if (!isHovered || !anchorRect) {
+      setPopoverPlacement(null);
+      return;
+    }
+
+    let ro: ResizeObserver | undefined;
+    let rafId = 0;
+
+    const update = () => {
+      const anchorEl = anchorRef.current;
+      const popEl = popoverRef.current;
+      if (!anchorEl || !popEl) return false;
+      const r = anchorEl.getBoundingClientRect();
+      const w = popEl.getBoundingClientRect().width;
+      const anchorCenterX = r.left + r.width / 2;
+      const left = clampPopoverCenterX(anchorCenterX, w, window.innerWidth, VIEWPORT_MARGIN);
+      const bottom = window.innerHeight - r.top + 8;
+      setPopoverPlacement({ left, bottom });
+      return true;
+    };
+
+    const start = () => {
+      if (update()) {
+        const popEl = popoverRef.current;
+        if (popEl && typeof ResizeObserver !== 'undefined') {
+          ro = new ResizeObserver(() => {
+            update();
+          });
+          ro.observe(popEl);
+        }
+        window.addEventListener('resize', update);
+        return;
+      }
+      rafId = requestAnimationFrame(start);
+    };
+
+    start();
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      ro?.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [isHovered, anchorRect, p]);
+
   const hoverTarget = (
     <div
       ref={anchorRef}
@@ -57,12 +106,14 @@ function ProductCardComponent({ product: p, index }: ProductCardProps) {
         anchorRect &&
         createPortal(
           <div
+            ref={popoverRef}
             className="product-card__detail-popover product-card__detail-popover--portal"
             role="tooltip"
             style={{
               position: 'fixed',
-              left: anchorRect.left + anchorRect.width / 2,
-              bottom: window.innerHeight - anchorRect.top + 8,
+              left: popoverPlacement?.left ?? anchorRect.left + anchorRect.width / 2,
+              bottom:
+                popoverPlacement?.bottom ?? window.innerHeight - anchorRect.top + 8,
               transform: 'translateX(-50%)',
             }}
             onMouseEnter={() => setIsHovered(true)}

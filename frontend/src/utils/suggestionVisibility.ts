@@ -21,3 +21,13 @@ export function shouldHideSuggestedAnswersFromResponse(
 export function shouldHideSuggestedAnswersForPage(msg: Message, productPageSize: number): boolean {
   return shouldHideSuggestedAnswersFromResponse(msg.products, msg.productTotalSize, productPageSize);
 }
+
+/**
+ * UI wrapper: never suppress chips for an explicit clarifying follow-up — those are not stale facet echoes.
+ */
+export function shouldHideSuggestedAnswersForMessage(msg: Message, productPageSize: number): boolean {
+  if (msg.clarifyingQuestion?.trim()) {
+    return false;
+  }
+  return shouldHideSuggestedAnswersForPage(msg, productPageSize);
+}

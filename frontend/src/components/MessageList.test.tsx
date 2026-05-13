@@ -210,6 +210,32 @@ describe('MessageList', () => {
     expect(screen.getByText(/Showing 1 of 25 products/)).toBeInTheDocument()
   })
 
+  it('shows suggested answers for clarifying question even when product total fits one page', () => {
+    const onSuggestedAnswer = vi.fn()
+    render(
+      <MessageList
+        messages={[
+          {
+            id: '1',
+            role: 'assistant',
+            content: 'Pick a variety.',
+            products: [{ id: 'p1', title: 'Organic Milk', description: '', price: '$4' }],
+            productTotalSize: 2,
+            clarifyingQuestion: '2% or whole?',
+            suggestedAnswers: [
+              { displayText: '2%', value: '2%' },
+              { displayText: 'Whole', value: 'Whole' },
+            ],
+          },
+        ]}
+        productPageSize={20}
+        onSuggestedAnswer={onSuggestedAnswer}
+      />
+    )
+    expect(screen.getByText('2%')).toBeInTheDocument()
+    expect(screen.getByText('Whole')).toBeInTheDocument()
+  })
+
   it('shows clarifying question and suggested answers after products when present', () => {
     const onSuggestedAnswer = vi.fn()
     render(
@@ -549,6 +575,94 @@ describe('MessageList', () => {
     )
     await userEvent.click(screen.getByRole('button', { name: /Dismiss error/i }))
     expect(onDismissError).toHaveBeenCalledWith('e1')
+  })
+
+  it('shows Show more and reveals additional in-memory products when there is no productNextPageToken', async () => {
+    const products = Array.from({ length: 25 }, (_, i) => ({
+      id: `p${i}`,
+      title: `Item ${i}`,
+      description: '',
+      price: '$1',
+      imageUri: 'http://img',
+    }))
+    render(
+      <MessageList
+        messages={[
+          {
+            id: '1',
+            role: 'assistant',
+            content: 'Results',
+            products,
+          },
+        ]}
+        productPageSize={10}
+      />
+    )
+    expect(screen.getByText(/Showing 10 of 25 products/)).toBeInTheDocument()
+    expect(screen.getByText('Item 0')).toBeInTheDocument()
+    expect(screen.getByText('Item 9')).toBeInTheDocument()
+    expect(screen.queryByText('Item 10')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Show more products/i })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /Show more products/i }))
+    expect(screen.getByText(/Showing 20 of 25 products/)).toBeInTheDocument()
+    expect(screen.getByText('Item 19')).toBeInTheDocument()
+    expect(screen.queryByText('Item 20')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /Show more products/i }))
+    expect(screen.getByText(/Showing 25 products/)).toBeInTheDocument()
+    expect(screen.getByText('Item 24')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Show more products/i })).not.toBeInTheDocument()
+  })
+
+  it('renders Load more for API continuation when productNextPageToken is set', async () => {
+    const onLoadMore = vi.fn()
+    const products = Array.from({ length: 15 }, (_, i) => ({
+      id: `p${i}`,
+      title: `Item ${i}`,
+      description: '',
+      price: '$1',
+      imageUri: 'http://img',
+    }))
+    render(
+      <MessageList
+        messages={[
+          {
+            id: '1',
+            role: 'assistant',
+            content: 'Page 1',
+            products,
+            productNextPageToken: 'next-page-token',
+            productTotalSize: 100,
+          },
+        ]}
+        productPageSize={10}
+        onLoadMore={onLoadMore}
+      />
+    )
+    expect(screen.getByText(/Showing 15 of 100 products/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Show more products/i })).not.toBeInTheDocument()
+    expect(screen.getByText('Item 14')).toBeInTheDocument()
+    const loadMore = screen.getByRole('button', { name: /Load more products/i })
+    await userEvent.click(loadMore)
+    expect(onLoadMore).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows all in-memory products at once when productPageSize is 0', () => {
+    const products = Array.from({ length: 12 }, (_, i) => ({
+      id: `p${i}`,
+      title: `Thing ${i}`,
+      description: '',
+      price: '$1',
+    }))
+    render(
+      <MessageList
+        messages={[{ id: '1', role: 'assistant', content: 'All', products }]}
+        productPageSize={0}
+      />
+    )
+    expect(screen.getByText('Thing 11')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Show more products/i })).not.toBeInTheDocument()
   })
 
   it('sets aria-busy false when not loading', () => {

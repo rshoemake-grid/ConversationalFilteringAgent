@@ -1,8 +1,54 @@
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import type { Message, SuggestedAnswer } from '../api/types';
 import { ProductCard } from './ProductCard';
 import { suggestedAnswerDisplayLabel } from '../utils/suggestedAnswerDisplay';
-import { shouldHideSuggestedAnswersForPage } from '../utils/suggestionVisibility';
+import { shouldHideSuggestedAnswersForMessage } from '../utils/suggestionVisibility';
+
+/** Visible product count for messages without server-side Retail continuation (no next-page token). */
+function effectiveLocalProductVisible(
+  messageId: string,
+  productsLength: number,
+  productPageSize: number,
+  storedById: Record<string, number>
+): number {
+  if (productPageSize <= 0 || productsLength === 0) {
+    return productsLength;
+  }
+  const initialCap = Math.min(productPageSize, productsLength);
+  const stored = storedById[messageId];
+  if (stored == null) {
+    return initialCap;
+  }
+  return Math.min(stored, productsLength);
+}
+
+function productCountLabel(
+  msg: Message,
+  visibleInGrid: number,
+  loaded: number,
+  hasServerPagination: boolean
+): string {
+  const totalSize = msg.productTotalSize;
+  const approx = msg.productTotalSizeIsApproximate ? 'at least ' : '';
+
+  if (hasServerPagination) {
+    return totalSize != null && totalSize >= 0
+      ? `Showing ${loaded} of ${approx}${totalSize} ${totalSize === 1 ? 'product' : 'products'}`
+      : `Showing ${loaded} ${loaded === 1 ? 'product' : 'products'}`;
+  }
+
+  if (totalSize != null && totalSize >= 0) {
+    if (visibleInGrid < loaded) {
+      return `Showing ${visibleInGrid} of ${loaded} ${loaded === 1 ? 'product' : 'products'} (${approx}${totalSize} total)`;
+    }
+    return `Showing ${loaded} of ${approx}${totalSize} ${totalSize === 1 ? 'product' : 'products'}`;
+  }
+
+  if (visibleInGrid < loaded) {
+    return `Showing ${visibleInGrid} of ${loaded} ${loaded === 1 ? 'product' : 'products'}`;
+  }
+  return `Showing ${loaded} ${loaded === 1 ? 'product' : 'products'}`;
+}
 
 interface MessageListProps {
   messages: Message[];
@@ -29,6 +75,16 @@ function MessageListComponent({
   onLoadMore,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [productVisibleByMessageId, setProductVisibleByMessageId] = useState<Record<string, number>>({});
+
+  const bumpLocalProductVisible = (messageId: string, productsLength: number) => {
+    if (productPageSize <= 0 || productsLength === 0) return;
+    setProductVisibleByMessageId((prev) => {
+      const current = effectiveLocalProductVisible(messageId, productsLength, productPageSize, prev);
+      const next = Math.min(current + productPageSize, productsLength);
+      return { ...prev, [messageId]: next };
+    });
+  };
 
   useEffect(() => {
     const el = bottomRef.current;
@@ -47,7 +103,7 @@ function MessageListComponent({
       {messages.map((msg, idx) => {
         const hasProducts = Boolean(msg.products && msg.products.length > 0);
         const hideSuggestions =
-          productPageSize > 0 && shouldHideSuggestedAnswersForPage(msg, productPageSize);
+          productPageSize > 0 && shouldHideSuggestedAnswersForMessage(msg, productPageSize);
         const showTopRoleRow =
           msg.role === 'user' ||
           msg.isError ||
@@ -114,15 +170,26 @@ function MessageListComponent({
               )}
             </div>
           )}
-          {msg.products && msg.products.length > 0 && (
+          {msg.products && msg.products.length > 0 && (() => {
+            const products = msg.products;
+            const loaded = products.length;
+            const hasServerPagination = Boolean(msg.productNextPageToken && onLoadMore);
+            const visibleInGrid = hasServerPagination
+              ? loaded
+              : effectiveLocalProductVisible(msg.id, loaded, productPageSize, productVisibleByMessageId);
+            const displayProducts = hasServerPagination ? products : products.slice(0, visibleInGrid);
+            const showLocalMore =
+              !hasServerPagination &&
+              productPageSize > 0 &&
+              visibleInGrid < loaded;
+
+            return (
             <div className="message__products">
               <h4>Products</h4>
               <div className="message__product-count-section">
                 <span className="message__product-count-source">Application</span>
                 <p className="message__product-count" aria-live="polite">
-                  {msg.productTotalSize != null && msg.productTotalSize >= 0
-                    ? `Showing ${msg.products.length} of ${msg.productTotalSizeIsApproximate ? 'at least ' : ''}${msg.productTotalSize} ${msg.productTotalSize === 1 ? 'product' : 'products'}`
-                    : `Showing ${msg.products.length} ${msg.products.length === 1 ? 'product' : 'products'}`}
+                  {productCountLabel(msg, visibleInGrid, loaded, hasServerPagination)}
                 </p>
               </div>
               {msg.role === 'assistant' && !msg.isError && (
@@ -141,10 +208,21 @@ function MessageListComponent({
                 </div>
               )}
               <div className="product-grid">
-                {msg.products.map((p, idx) => (
+                {displayProducts.map((p, idx) => (
                   <ProductCard key={p.id || `p-${idx}`} product={p} index={idx} />
                 ))}
               </div>
+              {showLocalMore && (
+                <button
+                  type="button"
+                  className="message__load-more"
+                  onClick={() => bumpLocalProductVisible(msg.id, loaded)}
+                  disabled={loading}
+                  aria-label="Show more products"
+                >
+                  Show more
+                </button>
+              )}
               {msg.productNextPageToken && onLoadMore && (
                 <button
                   type="button"
@@ -198,7 +276,8 @@ function MessageListComponent({
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
           {/* Suggested chips below the bubble only when there is no product grid; with products, follow-up
               options belong in clarifyingQuestion (rendered above) — otherwise GCP can echo stale facet chips. */}
           {msg.suggestedAnswers &&

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Message } from '../api/types';
-import { shouldHideSuggestedAnswersForPage } from './suggestionVisibility';
+import { shouldHideSuggestedAnswersForMessage, shouldHideSuggestedAnswersForPage } from './suggestionVisibility';
 
 function assistantMsg(partial: Partial<Message> & Pick<Message, 'products'>): Message {
   return {
@@ -52,5 +52,30 @@ describe('shouldHideSuggestedAnswersForPage', () => {
         0
       )
     ).toBe(false);
+  });
+});
+
+describe('shouldHideSuggestedAnswersForMessage', () => {
+  it('returns false when a clarifying question is present even if catalog fits one page', () => {
+    expect(
+      shouldHideSuggestedAnswersForMessage(
+        assistantMsg({
+          products: [{ id: 'p1', title: 'A', description: '', price: '' }],
+          productTotalSize: 3,
+          clarifyingQuestion: 'Which size?',
+        }),
+        20
+      )
+    ).toBe(false);
+  });
+
+  it('matches shouldHideSuggestedAnswersForPage when there is no clarifying question', () => {
+    const msg = assistantMsg({
+      products: [{ id: 'p1', title: 'A', description: '', price: '' }],
+      productTotalSize: 3,
+    });
+    expect(shouldHideSuggestedAnswersForMessage(msg, 20)).toBe(
+      shouldHideSuggestedAnswersForPage(msg, 20)
+    );
   });
 });
