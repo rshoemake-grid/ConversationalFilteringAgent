@@ -1,6 +1,7 @@
 package com.conversationalcommerce.agent.orchestration;
 
 import com.conversationalcommerce.agent.agent.AgentResponse;
+import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
 import com.conversationalcommerce.agent.web.ChatRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,9 +20,12 @@ class OrchestratorServiceTest {
     void setUp() {
         convoOrchestrator = new StubChatOrchestrator();
         adkOrchestrator = new StubChatOrchestrator();
+        var cc = new ConversationalCommerceConfig();
+        cc.setRetailSingleShotPerConversation(false);
         orchestratorService = new OrchestratorService(
                 new ConvoCommerceOrchestratorWrapper(convoOrchestrator),
-                new AdkOrchestrator(null, adkOrchestrator)
+                new AdkOrchestrator(null, adkOrchestrator),
+                new RetailProductApiGate(cc)
         );
     }
 

@@ -28,7 +28,7 @@ Use Swagger UI to **try requests**, see **schemas**, and download the spec for c
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | **`/api/chat`** | Main conversational commerce chat: text, image, load-more, context for multi-turn |
+| `POST` | **`/api/chat`** | Conversational commerce: text, image, multi-turn context; **no Retail listing continuation** after the initial merged product pull |
 | `GET` | **`/api/models`** | List **Gemini** model ids (when `GeminiModelsService` is available) |
 | `GET` | **`/`** | If `app.serve-frontend=true` and static `index.html` exists → SPA; else **302** to Swagger UI |
 | `GET` | **`/favicon.ico`** | **204 No Content** (placeholder) |
@@ -56,9 +56,9 @@ All JSON APIs use **`application/json`**.
 | **`previousAssistantText`** | string | No | Prior assistant message (for no-products / storage recovery context). |
 | **`previousSuggestedAnswers`** | array of `{ displayText, value }` | No | Prior chips (same shape as response `suggestedAnswers`). |
 | **`previousRefinedQuery`** | string | No | Last refined search string (e.g. “Any” / no-preference recovery). |
-| **`productPageToken`** | string | No | **Load more:** next page token from last **`ChatResponse`**. |
-| **`previousProductFilter`** | string | No | **Load more:** Retail filter string from last response (`productFilter`). |
-| **`productPageSize`** | integer | No | Page size override; null uses config default. |
+| **`productPageToken`** | string | No | **Deprecated:** not used for Retail. If sent with **`previousRefinedQuery`**, server returns a short message and **no** new products ([product-search-and-retail-apis.md](product-search-and-retail-apis.md)). |
+| **`previousProductFilter`** | string | No | Retail filter from last response (`productFilter`), echoed for context; not used for Retail list continuation. |
+| **`productPageSize`** | integer | No | Hint for UI / response heuristics only; does **not** cap the first catalog merge or call Retail for paging ([product-search-and-retail-apis.md](product-search-and-retail-apis.md)). |
 | **`productPool`** | array of **product-like objects** | No | Products from the last grid for **in-memory refinement** (`ProductPoolInput` in Java mirrors **`ProductDto`** fields). |
 | **`useSemanticReranking`** | boolean | No | When **`productPool`** is sent: allow Vertex semantic reranking (default true if omitted in business logic). |
 
@@ -78,8 +78,8 @@ All JSON APIs use **`application/json`**.
 | **`suggestedAnswers`** | array of `{ displayText, value }` | Quick-reply chips; **`value`** is what the client should send as **`message`** when tapped. |
 | **`productTotalSize`** | long? | Catalog hit count when known; omitted or negative mapped to null in HTTP layer. |
 | **`productTotalSizeIsApproximate`** | boolean? | True when total is estimated from pages. |
-| **`productNextPageToken`** | string? | Present when more pages exist (**Load more**). |
-| **`productFilter`** | string? | Retail filter used; echo on pagination. |
+| **`productNextPageToken`** | string? | Rarely set. This app does **not** call Retail for listing continuation; prefer **local paging** of **`products`**. May be omitted when `conversational-commerce.initial-catalog-suppress-next-page-token` is true—see [product-search-and-retail-apis.md](product-search-and-retail-apis.md). |
+| **`productFilter`** | string? | Retail filter used for the **initial** merged listing (session echo). |
 | **`clarifyingQuestion`** | string? | Follow-up question often shown after the product grid. |
 
 **`ProductDto`** (response) includes at least: `id`, `title`, `description`, `price`, optional `imageUri`, `gtin`, `productId`, `categories`, `brands`, `uri`, `availability`, `sizes`, `materials`, `attributes`, `detailsFetched`. See **`ChatResponse.ProductDto`** in code; **`id`** is the Retail resource **name** when returned by search (used for optional **Product.get** enrichment).

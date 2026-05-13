@@ -1,6 +1,7 @@
 package com.conversationalcommerce.agent.agent;
 
 import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
+import com.conversationalcommerce.agent.orchestration.RetailProductApiGate;
 import com.conversationalcommerce.agent.gemini.ClarifyingQuestionGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ class ConversationalCommerceAdapterTest {
     private StubConversationalCommerceClient stubClient;
     private StubRetailSearchClient stubSearchClient;
     private ConversationalCommerceConfig config;
+    private RetailProductApiGate retailProductApiGate;
 
     @BeforeEach
     void setUp() {
@@ -24,10 +26,14 @@ class ConversationalCommerceAdapterTest {
         config.setPlacement("projects/p/locations/global/catalogs/default_catalog/placements/default_search");
         config.setBranch("projects/p/locations/global/catalogs/default_catalog/branches/default_branch");
         config.setDefaultVisitorId("test-visitor");
+        config.setRetailSingleShotPerConversation(false);
 
         stubClient = new StubConversationalCommerceClient();
         stubSearchClient = new StubRetailSearchClient();
-        adapter = new ConversationalCommerceAdapter(stubClient, stubSearchClient, new ProductEnrichmentService(Optional.empty()), config, Optional.empty(), new ProductPoolNarrower(), null);
+        config.setInitialCatalogFetchAllPages(false);
+        config.setInitialCatalogParallelPageFetches(false);
+        retailProductApiGate = new RetailProductApiGate(config);
+        adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.empty(), new ProductPoolNarrower(), null, new InitialCatalogAggregator(stubSearchClient, config, retailProductApiGate));
     }
 
     @Test
@@ -189,7 +195,7 @@ class ConversationalCommerceAdapterTest {
     @Test
     void sendMessage_expandsShortStorageTypeBeforeSendingToApi() {
         config.setAttributeValueExpansion(Map.of("storageType", Map.of("F", "FROZEN", "C", "REFRIGERATED")));
-        adapter = new ConversationalCommerceAdapter(stubClient, stubSearchClient, new ProductEnrichmentService(Optional.empty()), config, Optional.empty(), new ProductPoolNarrower(), null);
+        adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.empty(), new ProductPoolNarrower(), null, new InitialCatalogAggregator(stubSearchClient, config, retailProductApiGate));
 
         stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
                 "Here are frozen shrimp options",
@@ -215,7 +221,7 @@ class ConversationalCommerceAdapterTest {
                 "dry storage", "D", "Dry storage", "D",
                 "F", "FROZEN", "C", "REFRIGERATED"
         )));
-        adapter = new ConversationalCommerceAdapter(stubClient, stubSearchClient, new ProductEnrichmentService(Optional.empty()), config, Optional.empty(), new ProductPoolNarrower(), null);
+        adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.empty(), new ProductPoolNarrower(), null, new InitialCatalogAggregator(stubSearchClient, config, retailProductApiGate));
 
         stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
                 "Here are dry storage rice options",
@@ -238,7 +244,7 @@ class ConversationalCommerceAdapterTest {
     @Test
     void sendMessage_chainsExpansionWhenPreviousSuggestedAnswerHasShortValue() {
         config.setAttributeValueExpansion(Map.of("storageType", Map.of("C", "REFRIGERATED")));
-        adapter = new ConversationalCommerceAdapter(stubClient, stubSearchClient, new ProductEnrichmentService(Optional.empty()), config, Optional.empty(), new ProductPoolNarrower(), null);
+        adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.empty(), new ProductPoolNarrower(), null, new InitialCatalogAggregator(stubSearchClient, config, retailProductApiGate));
 
         stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
                 "Here are refrigerated options",
@@ -298,7 +304,7 @@ class ConversationalCommerceAdapterTest {
                 return "What type of shrimp are you looking for? Raw, cooked, or peeled?";
             }
         };
-        adapter = new ConversationalCommerceAdapter(stubClient, stubSearchClient, new ProductEnrichmentService(Optional.empty()), config, Optional.of(stubGenerator), new ProductPoolNarrower(), null);
+        adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.of(stubGenerator), new ProductPoolNarrower(), null, new InitialCatalogAggregator(stubSearchClient, config, retailProductApiGate));
 
         stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
                 "Here are options", "conv-1", "Shrimp", "SIMPLE_PRODUCT_SEARCH", "agent", null, List.of()
@@ -358,7 +364,7 @@ class ConversationalCommerceAdapterTest {
                 return "Gemini-generated question";
             }
         };
-        adapter = new ConversationalCommerceAdapter(stubClient, stubSearchClient, new ProductEnrichmentService(Optional.empty()), config, Optional.of(stubGenerator), new ProductPoolNarrower(), null);
+        adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.of(stubGenerator), new ProductPoolNarrower(), null, new InitialCatalogAggregator(stubSearchClient, config, retailProductApiGate));
 
         String apiResponse = "I found many shoes. Could you tell me more about what you're looking for?";
         stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
@@ -519,7 +525,7 @@ class ConversationalCommerceAdapterTest {
         }
 
         @Override
-        public SearchResult searchWithPagination(String placement, String branch, String query, String visitorId, String filter, String pageToken, Integer pageSizeOverride) {
+        public SearchResult searchWithPagination(String placement, String branch, String query, String visitorId, String filter, String pageToken, Integer pageSizeOverride, Integer offset) {
             this.lastQuery = query;
             this.lastFilter = filter;
             if (returnEmptyWhenFilterContains != null && filter != null && filter.contains(returnEmptyWhenFilterContains)) {
@@ -532,7 +538,7 @@ class ConversationalCommerceAdapterTest {
     @Test
     void sendMessage_oneSuggestedAnswerFromApi_autoRunsIt() {
         config.setAttributeValueExpansion(Map.of("storageType", Map.of("S", "AMBIENT")));
-        adapter = new ConversationalCommerceAdapter(stubClient, stubSearchClient, new ProductEnrichmentService(Optional.empty()), config, Optional.empty(), new ProductPoolNarrower(), null);
+        adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.empty(), new ProductPoolNarrower(), null, new InitialCatalogAggregator(stubSearchClient, config, retailProductApiGate));
 
         stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
                 "What type of stock do you prefer?",
@@ -561,7 +567,7 @@ class ConversationalCommerceAdapterTest {
     void sendMessage_storageTypeSelectionUsesPreviousRefinedQueryAndFilter() {
         // Letter stock codes: no attributeValueExpansion D->DRY_STORAGE here — that expansion is for GCP text,
         // and would replace "D" before the Retail filter runs.
-        adapter = new ConversationalCommerceAdapter(stubClient, stubSearchClient, new ProductEnrichmentService(Optional.empty()), config, Optional.empty(), new ProductPoolNarrower(), null);
+        adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.empty(), new ProductPoolNarrower(), null, new InitialCatalogAggregator(stubSearchClient, config, retailProductApiGate));
 
         stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
                 "Here are dry storage options",
@@ -601,7 +607,7 @@ class ConversationalCommerceAdapterTest {
     @Test
     void sendMessage_storageTypeRecoveryWithProducts_keepsNonStorageSuggestionsFromApi() {
         config.setAttributeValueExpansion(Map.of("storageType", Map.of("R", "REFRIGERATED")));
-        adapter = new ConversationalCommerceAdapter(stubClient, stubSearchClient, new ProductEnrichmentService(Optional.empty()), config, Optional.empty(), new ProductPoolNarrower(), null);
+        adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.empty(), new ProductPoolNarrower(), null, new InitialCatalogAggregator(stubSearchClient, config, retailProductApiGate));
 
         stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
                 "Pick a brand?",
@@ -632,7 +638,7 @@ class ConversationalCommerceAdapterTest {
     @Test
     void sendMessage_storageTypeRecoveryNoProducts_reasksPreviousQuestionWithRemainingOptions() {
         config.setAttributeValueExpansion(Map.of("storageType", Map.of("D", "DRY_STORAGE")));
-        adapter = new ConversationalCommerceAdapter(stubClient, stubSearchClient, new ProductEnrichmentService(Optional.empty()), config, Optional.empty(), new ProductPoolNarrower(), null);
+        adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.empty(), new ProductPoolNarrower(), null, new InitialCatalogAggregator(stubSearchClient, config, retailProductApiGate));
 
         stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
                 "Here are dry storage options",
@@ -667,7 +673,7 @@ class ConversationalCommerceAdapterTest {
     @Test
     void sendMessage_storageTypeRecoveryNoProducts_oneOptionRemaining_autoRunsQuery() {
         config.setAttributeValueExpansion(Map.of("storageType", Map.of("S", "AMBIENT", "R", "REFRIGERATED", "D", "DRY_STORAGE")));
-        adapter = new ConversationalCommerceAdapter(stubClient, stubSearchClient, new ProductEnrichmentService(Optional.empty()), config, Optional.empty(), new ProductPoolNarrower(), null);
+        adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.empty(), new ProductPoolNarrower(), null, new InitialCatalogAggregator(stubSearchClient, config, retailProductApiGate));
 
         stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
                 "Options", "conv-1", "REFRIGERATED", "SIMPLE_PRODUCT_SEARCH", "agent", null, List.of()
@@ -698,7 +704,7 @@ class ConversationalCommerceAdapterTest {
     @Test
     void sendMessage_storageTypeRecoveryNoProducts_doesNotDuplicatePrefixWhenPrevTextAlreadyHasIt() {
         config.setAttributeValueExpansion(Map.of("storageType", Map.of("S", "AMBIENT", "R", "REFRIGERATED", "D", "DRY_STORAGE")));
-        adapter = new ConversationalCommerceAdapter(stubClient, stubSearchClient, new ProductEnrichmentService(Optional.empty()), config, Optional.empty(), new ProductPoolNarrower(), null);
+        adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.empty(), new ProductPoolNarrower(), null, new InitialCatalogAggregator(stubSearchClient, config, retailProductApiGate));
 
         stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
                 "Options", "conv-1", "REFRIGERATED", "SIMPLE_PRODUCT_SEARCH", "agent", null, List.of()

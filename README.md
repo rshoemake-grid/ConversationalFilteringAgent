@@ -4,8 +4,8 @@ A full-stack application (Spring Boot + React) that provides a chat UI to intera
 
 ## Architecture
 
-- **Approach A (`convo_commerce`)**: `ConversationalCommerceAdapter` calls **Retail conversationalSearch** for intent and follow-ups, then **Retail Search** for the product grid (and optional **Product.get** enrichment). No Gemini/ADK in the default wiring for this path.
-- **Approach B (`adk_orchestrator`)**: **Gemini** (ADK `LlmAgent`) orchestrates the turn; **`ConversationalCommerceTool.searchProducts`** calls the same **conversationalSearch** API; **`VaisrRetailProductResolver`** fills products via **Retail Search** and aligns UX with the adapter. Additional tools (loyalty, recommendations) may be attached to the agent.
+- **Approach A (`convo_commerce`)**: `ConversationalCommerceAdapter` calls **Retail conversationalSearch** for intent and follow-ups, then **Retail Search** for the product grid (optional **`InitialCatalogAggregator`** merges many pages on the first listing for PoC-style “big catalog” demos; **`productPool`** refines only within the list already shown). Optional **Product.get** enrichment. No Gemini/ADK in the default wiring for this path.
+- **Approach B (`adk_orchestrator`)**: **Gemini** (ADK `LlmAgent`) orchestrates the turn; **`ConversationalCommerceTool.searchProducts`** calls the same **conversationalSearch** API; **`VaisrRetailProductResolver`** fills products via **Retail Search** (same initial-catalog behavior where configured) and aligns UX with the adapter. Additional tools (loyalty, recommendations) may be attached to the agent.
 
 ## Prerequisites
 

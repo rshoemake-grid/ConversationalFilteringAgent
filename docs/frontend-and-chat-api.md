@@ -6,7 +6,7 @@ For **end-to-end user journeys** and **which backend/GCP services run** on each 
 
 ## UI flow (summary)
 
-1. User sends text, picks a **suggested answer**, uses **voice** or **image**, or clicks **Load more** / **Get more suggestions**.
+1. User sends text, picks a **suggested answer**, uses **voice** or **image**, or uses **Get more suggestions** where exposed.
 2. **`useChat`** (`frontend/src/hooks/useChat.ts`) updates local message state and calls **`sendChatMessage`** (`frontend/src/api/chatApi.ts`).
 3. **`POST /api/chat`** hits the Spring **`ChatController`**, which validates the body and calls **`OrchestratorService.process`**.
 4. The JSON response becomes an assistant **message** (text, products, suggested answers, clarifying question, pagination tokens, etc.).
@@ -20,7 +20,7 @@ These align with what **`OrchestratorService`** puts in the adapter **context**:
 | Field | Purpose |
 |-------|---------|
 | `mode` | `convo_commerce` \| `adk_orchestrator` |
-| `message` | User text (or empty when only image / load-more semantics apply on backend) |
+| `message` | User text (or empty when only **`imageBase64`** or legacy **`productPageToken`** satisfies validation) |
 | `conversationId` | GCP / session continuity |
 | `sessionId` | Visitor correlation |
 | `imageBase64` | Visual search payload |
@@ -28,15 +28,19 @@ These align with what **`OrchestratorService`** puts in the adapter **context**:
 | `previousAssistantText` | Context for follow-ups |
 | `previousSuggestedAnswers` | Prior chips |
 | `previousRefinedQuery` | Used for no-preference recovery and related logic |
-| `productPageToken` | **Load more**: next page |
-| `previousProductFilter` | **Load more**: same filter as prior search |
-| `productPageSize` | Page size override |
+| `productPageToken` | **Deprecated;** if sent, backend does **not** call Retail—see [product-search-and-retail-apis.md](product-search-and-retail-apis.md) |
+| `previousProductFilter` | Prior Retail filter (context / session merge) |
+| `productPageSize` | UI / heuristic hint only |
+| `productPool` | **In-memory refinement:** products from the last assistant grid; the backend narrows **only within this list** (no fresh full-catalog search for that step). |
+| `useSemanticReranking` | When `productPool` is sent: allow Vertex semantic reranking (server default applies if omitted). |
 
 Exact Java types and validation: **`ChatRequest.java`**, **`ChatController.java`**.
 
 ## Response shape
 
 **`ChatResponse`** includes `text`, `conversationId`, `refinedQuery`, `products`, `suggestedAnswers`, `clarifyingQuestion`, `rawResponse`, pagination fields (`productNextPageToken`, `productTotalSize`, …), and metadata like `queryType` and `source`.
+
+On the **first** catalog population, **`productNextPageToken`** is usually **omitted**; page **`products`** in the app. **`productPageToken`** on requests does **not** trigger further Retail listing ([product-search-and-retail-apis.md](product-search-and-retail-apis.md)).
 
 See **[CODE.md](../CODE.md)** for example JSON and frontend **Message** / **ProductDto** types.
 

@@ -1,3 +1,5 @@
 # Test profile - minimal config
 conversational-commerce:
   transport: rest
+  # Unit/integration tests often exercise multiple catalog turns in one conversation; production PoC defaults to true.
+  retail-single-shot-per-conversation: false

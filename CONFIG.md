@@ -145,6 +145,29 @@ If the agent keeps asking the same question (e.g. "Which brand would you prefer?
 
 ---
 
+## 2c. PoC: large first catalog listing (initial merge)
+
+For demos where the **Retail catalog** stands in for a customer-supplied product API, the backend **merges** multiple Retail Search **pages** on the **first** listing for a refined query (deduplicated, capped). The app **does not** call Retail Search again for "load more" / **`productPageToken`**—page **`products`** in your own UI or API. Optionally **hide `productNextPageToken`** on that response. **Refinement** with **`productPool`** narrows only the list already returned.
+
+Add under **`conversational-commerce`** in `application.yml` (defaults are in `application.yml.example`):
+
+```yaml
+conversational-commerce:
+  initial-catalog-page-size: 100
+  initial-catalog-fetch-all-pages: true
+  initial-catalog-max-products: 1000
+  initial-catalog-max-page-requests: 100
+  initial-catalog-suppress-next-page-token: true
+  initial-catalog-parallel-page-fetches: true
+  initial-catalog-max-concurrent-requests: 8
+  # Default true: no further Retail Search listing / brand Search after first catalog batch; Product.get still allowed. Set false for multi-listing tests.
+  retail-single-shot-per-conversation: true
+```
+
+Details: **[docs/product-search-and-retail-apis.md](docs/product-search-and-retail-apis.md)** (PoC section, single-shot section, and configuration table).
+
+---
+
 ## 3. GCP Project Configuration
 
 **Environment variables:**

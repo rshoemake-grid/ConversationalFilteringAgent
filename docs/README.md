@@ -5,9 +5,9 @@ Narrative documentation for how the Conversational Filtering Agent works. Prefer
 | Document | What it covers |
 |----------|----------------|
 | [api-reference.md](api-reference.md) | **REST API** — endpoints, request/response fields, errors, OpenAPI/Swagger links |
-| [user-flow-and-services.md](user-flow-and-services.md) | **User journeys** (chips, load more, image) and **which services/APIs run** in each orchestration mode |
+| [user-flow-and-services.md](user-flow-and-services.md) | **User journeys** (chips, product grid, image) and **which services/APIs run** in each orchestration mode |
 | [system-overview.md](system-overview.md) | Stack, major components, end-to-end path from browser to Google Cloud |
-| [product-search-and-retail-apis.md](product-search-and-retail-apis.md) | **Why there are two GCP calls** (conversational vs product search), pagination, enrichment, transports |
+| [product-search-and-retail-apis.md](product-search-and-retail-apis.md) | **Two GCP calls** (conversational vs Retail Search), merged first listing, pool-only refinement, enrichment, transports |
 | [orchestration-and-modes.md](orchestration-and-modes.md) | `convo_commerce` vs `adk_orchestrator`, orchestrators, tools |
 | [frontend-and-chat-api.md](frontend-and-chat-api.md) | React UI, `POST /api/chat`, important request fields for multi-turn |
 

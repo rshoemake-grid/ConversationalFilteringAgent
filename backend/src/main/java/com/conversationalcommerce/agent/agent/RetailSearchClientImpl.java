@@ -28,7 +28,7 @@ public class RetailSearchClientImpl implements RetailSearchClient {
 
     @Override
     public SearchResult searchWithPagination(String placement, String branch, String query, String visitorId,
-                                             String filter, String pageToken, Integer pageSizeOverride) {
+                                             String filter, String pageToken, Integer pageSizeOverride, Integer offset) {
         int pageSize = pageSizeOverride != null && pageSizeOverride > 0
                 ? pageSizeOverride
                 : (config != null ? config.productSearchPageSize() : 20);
@@ -41,7 +41,10 @@ public class RetailSearchClientImpl implements RetailSearchClient {
         if (filter != null && !filter.isBlank()) {
             reqBuilder.setFilter(filter);
         }
-        if (pageToken != null && !pageToken.isBlank()) {
+        boolean useOffset = offset != null && offset >= 0;
+        if (useOffset) {
+            reqBuilder.setOffset(offset);
+        } else if (pageToken != null && !pageToken.isBlank()) {
             reqBuilder.setPageToken(pageToken);
         }
         var req = reqBuilder.build();

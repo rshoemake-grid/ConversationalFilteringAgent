@@ -14,7 +14,7 @@ Every interaction follows the same entry path:
 4. **`OrchestratorService`** switches on **`mode`**:
    - **`convo_commerce`** → **`ConvoCommerceOrchestrator`** → **`ConversationalCommerceAdapter`**
    - **`adk_orchestrator`** → **`AdkOrchestrator`** (Gemini / ADK + tools)
-5. The result is mapped to **`ChatResponse`** JSON (text, products, chips, pagination, optional `rawResponse`, etc.).
+5. The result is mapped to **`ChatResponse`** JSON (text, products, chips, optional `rawResponse`, etc.).
 
 ```mermaid
 flowchart TB
@@ -42,7 +42,7 @@ flowchart TB
 |-------------|------------------------------|-------------------|
 | **Types a message and sends** | `message`, `mode`, `conversationId`, `sessionId`, optional context fields | Full turn through the active orchestrator (below). |
 | **Clicks a suggested-answer chip** | `message` = chip **value** (e.g. storage code), `previousAssistantText`, `previousSuggestedAnswers`, `previousRefinedQuery`, `previousProductFilter` as needed | Same as a normal turn; adapter or VAISR resolver uses prior context for filters, recovery, and re-asks. |
-| **Clicks Load more** | `productPageToken`, `previousRefinedQuery`, `previousProductFilter`, `productPageSize` | **`ConversationalCommerceAdapter`** short-circuits conversational search and calls **`RetailSearchClient.searchWithPagination`** only (see [product-search-and-retail-apis.md](product-search-and-retail-apis.md)). **ADK mode** normally does not drive load-more the same way; use **convo_commerce** for pagination unless you extend the ADK path. |
+| **Clicks Load more** (legacy) | `productPageToken`, `previousRefinedQuery`, … | **No Retail Search.** Adapter returns a short message; products are merged only on the **first** listing ([product-search-and-retail-apis.md](product-search-and-retail-apis.md)). Prefer **local paging** of `products`. |
 | **Attaches an image** | `imageBase64` (+ optional text) | **Conversational** request includes image; product listing still comes from **Retail Search** when a refined query is available. |
 | **Uses voice** | Same as text after the browser transcribes speech to a string | No separate backend “voice service”; it is a text message. Chrome-only UX: [frontend-and-chat-api.md](frontend-and-chat-api.md). |
 | **Get more suggestions** (if exposed) | Depends on implementation; may repeat or extend conversational context | Usually another conversational turn or client-driven cap change. |
@@ -55,19 +55,21 @@ The UI also **suppresses redundant storage chips** after product results and hon
 
 **Orchestrator:** `ConvoCommerceOrchestrator` → **`ConversationalCommerceAdapter.sendMessage`**.
 
-**Typical new turn** (not “load more”, not in-memory pool refine):
+**Typical new turn** (not in-memory pool refine, not legacy `productPageToken`-only):
 
 | Step | What runs | Google Cloud / external |
 |------|-----------|-------------------------|
 | 1 | Build **`ConversationalCommerceRequest`** (placement, branch, query, visitor id, conversation id, optional image). | |
 | 2 | **`ConversationalCommerceClient.search`** | **Retail `conversationalSearch`** on your placement (REST or gRPC per config). |
 | 3 | Parse **`refinedQuery`**, **`conversationId`**, **`queryType`**, **`suggestedAnswers`**, assistant text, **`rawResponse`**. | |
-| 4 | If a retail search should run: **`RetailSearchClient`** (`search` / `searchWithPagination`) with optional **filter** (brands, stock/storage, session merge). | **Retail Search API** (product listing on the branch). |
+| 4 | If a retail search should run: **`InitialCatalogAggregator`** merges the **first** catalog listing (parallel **offset** or sequential **nextPageToken**, up to **`initial-catalog-*`** caps) with optional **filter**. | **Retail Search API** (product listing on the branch). |
 | 5 | Optionally **`ProductEnrichmentService`** | **`Product.get`** (REST) when transport and product `name` allow enrichment. |
 | 6 | Optionally **`VertexAiRankingService`** | **Vertex AI** ranking API when configured (`VertexAiRankingConfig`). |
 | 7 | Adapter applies policies (clarifying follow-up, storage recovery, pagination metadata, stripping echoed storage chips when products are returned, etc.). | |
 
-**Load more:** step 2 is skipped; only **Retail Search** pagination is called with the stored query, filter, and page token.
+**First catalog fill (PoC):** backend **`initial-catalog-*`** settings control how many pages/products are merged; responses usually omit **`productNextPageToken`** so the UI **pages `products` locally**—there is **no** Retail listing continuation. See [product-search-and-retail-apis.md](product-search-and-retail-apis.md).
+
+**Legacy `productPageToken`:** no **Retail Search** and no conversational search; see [product-search-and-retail-apis.md](product-search-and-retail-apis.md).
 
 **In-memory pool refine** (`productPool` in context): conversational commerce may narrow an existing product list without a full catalog listing step; see **`ProductPoolNarrower`** in the adapter.
 
@@ -84,7 +86,7 @@ The UI also **suppresses redundant storage chips** after product results and hon
 | 1 | **Gemini (via ADK / Gen AI SDK)** consumes the user message and session. | **Generative Language** / Vertex (per **`AdkConfig`** and API key / ADC). |
 | 2 | The model may call **`ConversationalCommerceTool.searchProducts`** (function tool). | That tool calls **`ConversationalCommerceClient.search`** → **Retail `conversationalSearch`** (same as Approach A step 2). |
 | 3 | Tool result is returned to the model; **`AdkVaisrSessionBridge`** maps **ADK session id** ↔ **GCP `conversationId`** so the tool can pass **VAISR** continuity on the next `searchProducts` call. | In-memory map in the app (not a GCP API). |
-| 4 | After the run, **`VaisrRetailProductResolver.resolve`** turns the last successful tool payload into products: **Retail Search**, recovery logic parallel to the adapter (storage / no-preference paths), and optional **`ClarifyingQuestionGenerator` (Gemini)** for generated clarifying copy when product counts exceed thresholds. | **Retail Search API**; optional **Gemini** for clarifying text. |
+| 4 | After the run, **`VaisrRetailProductResolver.resolve`** turns the last successful tool payload into products: **`InitialCatalogAggregator`** / **Retail Search** (same PoC first-fill behavior as Approach A where configured), recovery logic parallel to the adapter (storage / no-preference paths), and optional **`ClarifyingQuestionGenerator` (Gemini)** for generated clarifying copy when product counts exceed thresholds. | **Retail Search API**; optional **Gemini** for clarifying text. |
 | 5 | **`AdkOrchestrator`** merges model text, tool errors, **`suggestedAnswers`**, and applies policies (e.g. drop echoed **storage** suggestions when product hits exist). | |
 
 Other ADK tools (loyalty, recommendations, etc., if configured on the agent) follow the same pattern: **model decides** → **tool executes** → **response merged** into **`AgentResponse`**.
@@ -98,7 +100,7 @@ If **no Gemini API key / ADC** is available, **`AdkOrchestrator`** returns a **p
 | Goal | Primary caller | Primary GCP / model API |
 |------|----------------|-------------------------|
 | Multi-turn intent, refined query, chips | `ConversationalCommerceClient` | Retail **conversationalSearch** |
-| Product grid, filters, pagination | `RetailSearchClient` implementations | Retail **Search** (products) |
+| Product grid (first listing per refined query) | **`InitialCatalogAggregator`**, `RetailSearchClient` | Retail **Search** (products), merged once per search |
 | Richer product cards | `ProductEnrichmentService` | Retail **Product.get** (when enabled) |
 | Rerank search hits | `VertexAiRankingService` | Vertex AI (optional) |
 | Route shopping + tools + natural reply | `AdkOrchestrator` + `LlmAgent` | **Gemini** (ADK) |

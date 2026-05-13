@@ -1,7 +1,9 @@
 package com.conversationalcommerce.agent.web;
 
 import com.conversationalcommerce.agent.agent.AgentResponse;
+import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
 import com.conversationalcommerce.agent.orchestration.OrchestratorService;
+import com.conversationalcommerce.agent.orchestration.RetailProductApiGate;
 import com.conversationalcommerce.agent.web.ChatRequest.OrchestrationMode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -158,7 +160,13 @@ class ChatControllerTest {
         private boolean throwOnNext;
 
         StubOrchestratorService() {
-            super(null, null);
+            super(null, null, stubGate());
+        }
+
+        private static RetailProductApiGate stubGate() {
+            var c = new ConversationalCommerceConfig();
+            c.setRetailSingleShotPerConversation(false);
+            return new RetailProductApiGate(c);
         }
 
         void setNextResponse(AgentResponse r) {

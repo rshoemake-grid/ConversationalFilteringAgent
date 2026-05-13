@@ -14,6 +14,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +35,9 @@ public class RetailConversationalSearchClientRest implements ConversationalComme
     private static final Set<Integer> RETRYABLE_STATUS_CODES = Set.of(429, 502, 503, 504);
     private static final int MAX_ATTEMPTS = 3;
     private static final long INITIAL_BACKOFF_MS = 500;
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(15);
+    /** Conversational responses can be slow; still bounded so the servlet thread does not hang forever. */
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(180);
 
     private final ConversationalCommerceConfig config;
     private final GcpCredentialsProvider credentialsProvider;
@@ -46,7 +50,7 @@ public class RetailConversationalSearchClientRest implements ConversationalComme
         this.config = config;
         this.credentialsProvider = credentialsProvider;
         this.brandDisplayResolver = brandDisplayResolver;
-        this.httpClient = HttpClient.newBuilder().build();
+        this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
         log.info("Using REST transport for GCP Conversational Commerce (bypasses gRPC/ALPN)");
     }
 
@@ -108,6 +112,7 @@ public class RetailConversationalSearchClientRest implements ConversationalComme
             String token = credentials.getAccessToken().getTokenValue();
         var requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
+                .timeout(REQUEST_TIMEOUT)
                 .header("Authorization", "Bearer " + token)
                 .header("Content-Type", "application/json");
         String quotaProject = credentialsProvider.getQuotaProject();

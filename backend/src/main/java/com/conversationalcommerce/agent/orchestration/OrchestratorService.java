@@ -14,10 +14,13 @@ public class OrchestratorService {
 
     private final ChatOrchestrator convoCommerceOrchestrator;
     private final ChatOrchestrator adkOrchestrator;
+    private final RetailProductApiGate retailProductApiGate;
 
-    public OrchestratorService(ConvoCommerceOrchestrator convoCommerceOrchestrator, AdkOrchestrator adkOrchestrator) {
+    public OrchestratorService(ConvoCommerceOrchestrator convoCommerceOrchestrator, AdkOrchestrator adkOrchestrator,
+                               RetailProductApiGate retailProductApiGate) {
         this.convoCommerceOrchestrator = convoCommerceOrchestrator;
         this.adkOrchestrator = adkOrchestrator;
+        this.retailProductApiGate = retailProductApiGate;
     }
 
     public AgentResponse process(ChatRequest.OrchestrationMode mode, String message, String conversationId, String sessionId,
@@ -59,9 +62,14 @@ public class OrchestratorService {
             context.put("useSemanticReranking", useSemanticReranking != null ? useSemanticReranking : Boolean.TRUE);
         }
 
-        return switch (mode) {
-            case convo_commerce -> convoCommerceOrchestrator.process(message, conversationId, context);
-            case adk_orchestrator -> adkOrchestrator.process(message, conversationId, context);
-        };
+        retailProductApiGate.beginChatTurn(conversationId, sessionId);
+        try {
+            return switch (mode) {
+                case convo_commerce -> convoCommerceOrchestrator.process(message, conversationId, context);
+                case adk_orchestrator -> adkOrchestrator.process(message, conversationId, context);
+            };
+        } finally {
+            retailProductApiGate.endChatTurn();
+        }
     }
 }

@@ -3,9 +3,11 @@ package com.conversationalcommerce.agent.orchestration;
 import com.conversationalcommerce.agent.agent.AgentResponse;
 import com.conversationalcommerce.agent.agent.ConversationalCommerceClient;
 import com.conversationalcommerce.agent.agent.ProductEnrichmentService;
+import com.conversationalcommerce.agent.agent.InitialCatalogAggregator;
 import com.conversationalcommerce.agent.agent.RetailSearchClient;
 import com.conversationalcommerce.agent.agent.SearchResult;
 import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
+import com.conversationalcommerce.agent.orchestration.RetailProductApiGate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +30,7 @@ class VaisrRetailProductResolverTest {
     RetailSearchClient searchClient;
 
     ConversationalCommerceConfig config = new ConversationalCommerceConfig();
-
+    InitialCatalogAggregator aggregator;
     VaisrRetailProductResolver resolver;
 
     @BeforeEach
@@ -36,9 +38,13 @@ class VaisrRetailProductResolverTest {
         config.setPlacement("p");
         config.setBranch("b");
         config.setProductCountThreshold(50);
+        config.setInitialCatalogFetchAllPages(false);
+        config.setRetailSingleShotPerConversation(false);
+        var gate = new RetailProductApiGate(config);
+        aggregator = new InitialCatalogAggregator(searchClient, config, gate);
         resolver = new VaisrRetailProductResolver(
-                searchClient,
-                new ProductEnrichmentService(Optional.empty()),
+                aggregator,
+                new ProductEnrichmentService(Optional.empty(), config),
                 config,
                 Optional.empty());
     }
@@ -47,7 +53,7 @@ class VaisrRetailProductResolverTest {
     void resolvesAmbientSelectionUsingPreviousRefinedQueryAndRunsRetailSearch() {
         var pr = AgentResponse.ProductResult.of("id1", "Rice A", "d", "$1", "");
         when(searchClient.searchWithPagination(
-                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"S\")"), eq(null), eq(null)))
+                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"S\")"), eq(null), any(), eq(null)))
                 .thenReturn(SearchResult.of(List.of(pr), null, 3));
 
         var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(
@@ -69,7 +75,7 @@ class VaisrRetailProductResolverTest {
     void storageRecoveryRunsWithOnlyPreviousRefinedQueryAndNoSuggestedAnswersList() {
         var pr = AgentResponse.ProductResult.of("id1", "Rice A", "d", "$1", "");
         when(searchClient.searchWithPagination(
-                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"D\")"), eq(null), eq(null)))
+                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"D\")"), eq(null), any(), eq(null)))
                 .thenReturn(SearchResult.of(List.of(pr), null, 3));
 
         var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(
@@ -88,7 +94,7 @@ class VaisrRetailProductResolverTest {
     @Test
     void storageRecoveryWithNoProducts_reasksWithRemainingSuggestedAnswers() {
         when(searchClient.searchWithPagination(
-                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"D\")"), eq(null), eq(null)))
+                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"D\")"), eq(null), any(), eq(null)))
                 .thenReturn(SearchResult.of(List.of(), null, 0));
 
         var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(
@@ -118,7 +124,7 @@ class VaisrRetailProductResolverTest {
     @Test
     void vaisrAlreadySaysNoProductsDoesNotAppendAgain() {
         when(searchClient.searchWithPagination(
-                eq("p"), eq("b"), eq("rice"), any(), eq(null), eq(null), eq(null)))
+                eq("p"), eq("b"), eq("rice"), any(), eq(null), eq(null), any(), eq(null)))
                 .thenReturn(SearchResult.of(List.of(), null, 0));
 
         var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(

@@ -13,6 +13,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -27,10 +28,12 @@ public class RetailSearchClientRest implements RetailSearchClient {
 
     private static final Logger log = LoggerFactory.getLogger(RetailSearchClientRest.class);
     private static final String BASE_URL = "https://retail.googleapis.com/v2";
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(15);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(120);
 
     private final GcpCredentialsProvider credentialsProvider;
     private final ConversationalCommerceConfig config;
-    private final HttpClient httpClient = HttpClient.newBuilder().build();
+    private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
 
     public RetailSearchClientRest(GcpCredentialsProvider credentialsProvider, ConversationalCommerceConfig config) {
         this.credentialsProvider = credentialsProvider;
@@ -39,14 +42,16 @@ public class RetailSearchClientRest implements RetailSearchClient {
 
     @Override
     public SearchResult searchWithPagination(String placement, String branch, String query, String visitorId,
-                                             String filter, String pageToken, Integer pageSizeOverride) {
+                                             String filter, String pageToken, Integer pageSizeOverride, Integer offset) {
         String url = BASE_URL + "/" + placement + ":search";
         String filterJson = (filter != null && !filter.isBlank())
                 ? ", \"filter\": \"" + escapeJson(filter) + "\""
                 : "";
-        String pageTokenJson = (pageToken != null && !pageToken.isBlank())
+        boolean useOffset = offset != null && offset >= 0;
+        String pageTokenJson = !useOffset && pageToken != null && !pageToken.isBlank()
                 ? ", \"pageToken\": \"" + escapeJson(pageToken) + "\""
                 : "";
+        String offsetJson = useOffset ? ", \"offset\": " + offset : "";
         int pageSize = pageSizeOverride != null && pageSizeOverride > 0
                 ? pageSizeOverride
                 : (config != null ? config.productSearchPageSize() : 20);
@@ -56,7 +61,7 @@ public class RetailSearchClientRest implements RetailSearchClient {
                   "query": "%s",
                   "visitorId": "%s",
                   "pageSize": %d,
-                  "variantRollupKeys": ["price"]%s%s
+                  "variantRollupKeys": ["price"]%s%s%s
                 }
                 """.formatted(
                 escapeJson(branch),
@@ -64,7 +69,8 @@ public class RetailSearchClientRest implements RetailSearchClient {
                 escapeJson(visitorId),
                 pageSize,
                 filterJson,
-                pageTokenJson
+                pageTokenJson,
+                offsetJson
         );
 
         try {
@@ -74,6 +80,7 @@ public class RetailSearchClientRest implements RetailSearchClient {
 
             var requestBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(url))
+                    .timeout(REQUEST_TIMEOUT)
                     .header("Authorization", "Bearer " + token)
                     .header("Content-Type", "application/json");
             String quotaProject = credentialsProvider.getQuotaProject();

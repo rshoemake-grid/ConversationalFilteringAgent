@@ -1,6 +1,7 @@
 package com.conversationalcommerce.agent.agent;
 
 import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
+import com.conversationalcommerce.agent.orchestration.RetailProductApiGate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -20,12 +21,15 @@ public class BrandDisplayResolver {
 
     private final ConversationalCommerceConfig config;
     private final RetailSearchClient searchClient;
+    private final RetailProductApiGate retailProductApiGate;
     private final Map<String, String> cache = new ConcurrentHashMap<>();
 
     public BrandDisplayResolver(ConversationalCommerceConfig config,
-                                RetailSearchClient searchClient) {
+                                RetailSearchClient searchClient,
+                                RetailProductApiGate retailProductApiGate) {
         this.config = config;
         this.searchClient = searchClient;
+        this.retailProductApiGate = retailProductApiGate;
     }
 
     /**
@@ -81,6 +85,10 @@ public class BrandDisplayResolver {
         String cacheKey = attrKey + ":" + value;
         String cached = cache.get(cacheKey);
         if (cached != null) return cached;
+
+        if (!retailProductApiGate.mayQueryRetailSearchApis()) {
+            return toTitleCase(value);
+        }
 
         // 4. API lookup via product search
         if (searchClient != null && config.placement() != null && !config.placement().isEmpty()

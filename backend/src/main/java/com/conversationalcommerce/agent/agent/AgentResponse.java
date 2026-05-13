@@ -20,9 +20,9 @@ public record AgentResponse(
         long productTotalSize,
         /** True when productTotalSize is approximated (pages×pageSize) because raw search didn't provide it. */
         boolean productTotalSizeIsApproximate,
-        /** Token to fetch next page; null if no more. */
+        /** Rarely set; this app does not use Retail listing continuation. */
         String productNextPageToken,
-        /** Filter used for search (for load-more to reuse). */
+        /** Retail filter used for the merged first listing (session echo). */
         String productFilter,
         /** Clarifying question to show after products (e.g. "Would you like 12oz or 24oz?"). */
         String clarifyingQuestion

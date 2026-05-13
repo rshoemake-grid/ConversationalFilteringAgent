@@ -62,8 +62,26 @@ conversational-commerce:
   # Set true if attributes.stockType stores AMBIENT / REFRIGERATED / DRY_STORAGE instead of letters.
   stock-type-filter-use-canonical-values: ${STOCK_TYPE_FILTER_USE_CANONICAL_VALUES:false}
   stock-type-filter-attribute: ${STOCK_TYPE_FILTER_ATTRIBUTE:stockType}
-  # Max products returned per search (REST and gRPC)
+  # Hint for UI heuristics (approx totals, chip suppression). Does not cap initial catalog merge; Retail listing has no load-more.
   product-search-page-size: ${PRODUCT_SEARCH_PAGE_SIZE:20}
+  # PoC: first catalog listing (not in-memory pool refinement) — large pages and optional multi-page merge.
+  # Retail API page size is typically capped at 100 per request.
+  initial-catalog-page-size: ${INITIAL_CATALOG_PAGE_SIZE:100}
+  # When true, follow nextPageToken until exhausted or caps below (maximized list; no UI pagination on first fill by default).
+  initial-catalog-fetch-all-pages: ${INITIAL_CATALOG_FETCH_ALL_PAGES:true}
+  # Stop merging after this many products (safety).
+  initial-catalog-max-products: ${INITIAL_CATALOG_MAX_PRODUCTS:1000}
+  # Maximum Retail list calls per aggregated initial search (safety).
+  initial-catalog-max-page-requests: ${INITIAL_CATALOG_MAX_PAGE_REQUESTS:100}
+  # When true, omit nextPageToken on initial catalog responses (use local paging of products; no Retail listing continuation).
+  initial-catalog-suppress-next-page-token: ${INITIAL_CATALOG_SUPPRESS_NEXT_PAGE_TOKEN:true}
+  # When true (default), initial merge uses parallel Retail requests with offset (faster). When false, walks nextPageToken sequentially.
+  initial-catalog-parallel-page-fetches: ${INITIAL_CATALOG_PARALLEL_PAGE_FETCHES:true}
+  # Thread pool size for parallel initial catalog requests (capped at 64 in code).
+  initial-catalog-max-concurrent-requests: ${INITIAL_CATALOG_MAX_CONCURRENT_REQUESTS:8}
+  # PoC (default true): after the first merged initial catalog listing for a conversation/session, do not call
+  # Retail Search again for catalog listing or brand display lookup. Product.get enrichment is unchanged. Conversational Search is unchanged.
+  retail-single-shot-per-conversation: ${RETAIL_SINGLE_SHOT_PER_CONVERSATION:true}
   # Above this count we ask to narrow
   product-count-threshold: ${PRODUCT_COUNT_THRESHOLD:50}
   # Attribute mappings - see .cursor/rules/attribute-mappings.mdc

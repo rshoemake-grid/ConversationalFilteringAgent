@@ -2,14 +2,14 @@
 
 Chat requests include a **`mode`** field. **`OrchestratorService`** routes to one of two orchestrators.
 
-For **step-by-step user journeys** (chips, load more, etc.) and **which external services each mode invokes**, read **[user-flow-and-services.md](user-flow-and-services.md)** first.
+For **step-by-step user journeys** (chips, product grid, refinement) and **which external services each mode invokes**, read **[user-flow-and-services.md](user-flow-and-services.md)** first.
 
 ## `convo_commerce` (Approach A)
 
 - **Orchestrator:** `ConvoCommerceOrchestrator`
 - **Behavior:** Delegates every turn to **`ConversationalCommerceAdapter`**, which:
   1. Calls **`ConversationalCommerceClient`** (conversational search).
-  2. When appropriate, calls **`RetailSearchClient`** for products (see **[product-search-and-retail-apis.md](product-search-and-retail-apis.md)**).
+  2. When appropriate, loads products via **`InitialCatalogAggregator`** (merged first listing only; **no** Retail listing continuation), then optional enrichment (see **[product-search-and-retail-apis.md](product-search-and-retail-apis.md)**).
 - **Gemini / ADK:** Not the main router for this path. The adapter contains a branch that would use **`ClarifyingQuestionGenerator`** (Gemini) when `orchestrationMode` is not `convo_commerce`; **`OrchestratorService` only attaches `ConversationalCommerceAdapter` for `convo_commerce`**, so that branch is **inactive** in the default wiring.
 
 The codebase also defines a **`GeneralQuestionSpecialist`** (Gemini via ADK-style runner) intended for **GENERAL_QUESTION** handling; it is **not** referenced from **`ConversationalCommerceAdapter`** today—shopping vs chit-chat still flows through conversational search and adapter logic.
@@ -24,7 +24,7 @@ Product **grids** in the UI still ultimately depend on how tool results and foll
 
 ## Context passed into the adapter
 
-`OrchestratorService` builds a **context** map (visitor/session id, image, max suggested answers, previous assistant text, suggested answers, refined query, product page token, filter, page size). **`ConversationalCommerceAdapter`** reads these keys for recovery, pagination, and filtering.
+`OrchestratorService` builds a **context** map (visitor/session id, image, max suggested answers, previous assistant text, suggested answers, refined query, product page token, filter, page size, **product pool**). **`ConversationalCommerceAdapter`** reads these keys for recovery, pagination, filtering, and **in-memory refinement**.
 
 Details of HTTP fields: **[frontend-and-chat-api.md](frontend-and-chat-api.md)**.
 
@@ -36,4 +36,5 @@ Details of HTTP fields: **[frontend-and-chat-api.md](frontend-and-chat-api.md)**
 | `ConvoCommerceOrchestrator` | Thin wrapper around `ConversationalAgent` |
 | `AdkOrchestrator` | ADK session + `runAsync` |
 | `ConversationalCommerceTool` | ADK tool wrapping conversational search |
+| `InitialCatalogAggregator` | Merges multiple Retail Search pages on the first catalog fill (configurable caps) |
 | `ConversationalCommerceAdapter` | Full GCP conversational + product search pipeline |

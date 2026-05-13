@@ -26,28 +26,28 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
     private static final Logger log = LoggerFactory.getLogger(ConversationalCommerceAdapter.class);
 
     private final ConversationalCommerceClient client;
-    private final RetailSearchClient searchClient;
     private final ProductEnrichmentService enrichmentService;
     private final ConversationalCommerceConfig config;
     private final Optional<ClarifyingQuestionGenerator> clarifyingGenerator;
     private final ProductPoolNarrower productPoolNarrower;
     private final VertexAiRankingService vertexAiRankingService;
+    private final InitialCatalogAggregator initialCatalogAggregator;
 
     public ConversationalCommerceAdapter(
             ConversationalCommerceClient client,
-            RetailSearchClient searchClient,
             ProductEnrichmentService enrichmentService,
             ConversationalCommerceConfig config,
             Optional<ClarifyingQuestionGenerator> clarifyingGenerator,
             ProductPoolNarrower productPoolNarrower,
-            VertexAiRankingService vertexAiRankingService) {
+            VertexAiRankingService vertexAiRankingService,
+            InitialCatalogAggregator initialCatalogAggregator) {
         this.client = client;
-        this.searchClient = searchClient;
         this.enrichmentService = enrichmentService;
         this.config = config;
         this.clarifyingGenerator = clarifyingGenerator != null ? clarifyingGenerator : Optional.empty();
         this.productPoolNarrower = productPoolNarrower;
         this.vertexAiRankingService = vertexAiRankingService;
+        this.initialCatalogAggregator = initialCatalogAggregator;
     }
 
     @Override
@@ -58,38 +58,20 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
         String prevFilter = (String) context.get("previousProductFilter");
         Integer productPageSizeOverride = context.get("productPageSize") instanceof Number n ? n.intValue() : null;
 
-        // Load more: skip conversational API, fetch next page directly
+        // Legacy clients may send productPageToken; we do not call Retail for continuation — the initial merge returns the full list (up to caps).
         if (productPageToken != null && !productPageToken.isBlank() && prevRefinedForLoadMore != null && !prevRefinedForLoadMore.isBlank()) {
-            try {
-                SearchResult sr = searchClient.searchWithPagination(
-                        config.placement(), config.branch(), prevRefinedForLoadMore.trim(), visitorId,
-                        prevFilter != null && !prevFilter.isBlank() ? prevFilter : null,
-                        productPageToken,
-                        productPageSizeOverride);
-                var prods = enrichmentService.enrich(sr.products());
-                String countText = prods.isEmpty() ? "No more products." : (prods.size() == 1 ? "1 more product." : prods.size() + " more products.");
-                long totalSize = sr.totalSize();
-                boolean totalSizeIsApproximate = false;
-                if (totalSize < 0 && !prods.isEmpty()) {
-                    int pageSize = getEffectivePageSize(productPageSizeOverride);
-                    totalSize = prods.size() + (sr.nextPageToken() != null && !sr.nextPageToken().isBlank() ? pageSize : 0);
-                    totalSizeIsApproximate = true;
-                }
-                return AgentResponse.builder()
-                        .text(countText)
-                        .conversationId(conversationId != null ? conversationId : "")
-                        .refinedQuery(prevRefinedForLoadMore.trim())
-                        .products(prods)
-                        .queryType("SIMPLE_PRODUCT_SEARCH")
-                        .source("app")
-                        .productTotalSize(totalSize >= 0 ? totalSize : -1)
-                        .productTotalSizeIsApproximate(totalSizeIsApproximate)
-                        .productNextPageToken(sr.nextPageToken())
-                        .productFilter(prevFilter)
-                        .build();
-            } catch (Exception e) {
-                log.warn("Load more failed: {}", e.getMessage());
-            }
+            log.debug("Ignoring productPageToken: Retail product pagination after the initial listing is disabled.");
+            return AgentResponse.builder()
+                    .text("All products for this search are already included above. Scroll the list or refine your request.")
+                    .conversationId(conversationId != null ? conversationId : "")
+                    .refinedQuery(prevRefinedForLoadMore.trim())
+                    .products(List.of())
+                    .queryType("SIMPLE_PRODUCT_SEARCH")
+                    .source("app")
+                    .productTotalSize(-1)
+                    .productNextPageToken(null)
+                    .productFilter(prevFilter)
+                    .build();
         }
 
         @SuppressWarnings("unchecked")
@@ -156,16 +138,14 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                 }
                 filter = combineRetailFilters(sanitizeSessionProductFilter((String) context.get("previousProductFilter")), filter);
                 productFilterUsed = filter;
-                String pageToken = (productPageToken != null && !productPageToken.isBlank()) ? productPageToken : null;
-                searchResult = searchClient.searchWithPagination(
+                searchResult = initialCatalogAggregator.searchCatalog(
                         config.placement(),
                         config.branch(),
                         searchQuery,
                         visitorId,
                         filter,
-                        pageToken,
-                        productPageSizeOverride
-                );
+                        null,
+                        null);
                 products = enrichmentService.enrich(searchResult.products());
             } catch (Exception e) {
                 log.warn("Product search failed (may use gRPC; try transport=rest for full REST): {}", e.getMessage());
@@ -257,11 +237,12 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                             String stFilter = combineRetailFilters(
                                     sanitizeSessionProductFilter((String) context.get("previousProductFilter")),
                                     buildStorageTypeFilter(filterValue));
-                            List<AgentResponse.ProductResult> autoProducts = searchClient.search(
-                                    config.placement(), config.branch(), prevRefined.trim(), visitorId, stFilter);
-                            autoProducts = enrichmentService.enrich(autoProducts);
+                            SearchResult autoSr = initialCatalogAggregator.searchCatalog(
+                                    config.placement(), config.branch(), prevRefined.trim(), visitorId, stFilter, null, null);
+                            List<AgentResponse.ProductResult> autoProducts = enrichmentService.enrich(autoSr.products());
                             products = autoProducts;
                             productsToReturn = autoProducts;
+                            searchResult = autoSr;
                             if (!autoProducts.isEmpty()) {
                                 int n = autoProducts.size();
                                 text = n == 1 ? "I found 1 product matching your request." : "I found " + n + " products matching your request.";
@@ -667,22 +648,25 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                 }
                 String newFilter = buildStorageTypeFilter(filterValue);
                 String merged = combineRetailFilters(session, newFilter);
-                var prods = searchClient.search(config.placement(), config.branch(), baseQuery, visitorId, merged);
-                prods = enrichmentService.enrich(prods);
+                SearchResult sr = initialCatalogAggregator.searchCatalog(
+                        config.placement(), config.branch(), baseQuery, visitorId, merged, null, null);
+                var prods = enrichmentService.enrich(sr.products());
                 String msg = prods.isEmpty() ? "No products found." : (prods.size() == 1 ? "I found 1 product matching your request." : "I found " + prods.size() + " products matching your request.");
                 return new AutoRunResult(prods, msg, merged);
             }
             String brandFilter = buildBrandFilterWhenApplicable(value, suggestedAnswers, context);
             if (brandFilter != null) {
                 String merged = combineRetailFilters(session, brandFilter);
-                var prods = searchClient.search(config.placement(), config.branch(), baseQuery, visitorId, merged);
-                prods = enrichmentService.enrich(prods);
+                SearchResult sr = initialCatalogAggregator.searchCatalog(
+                        config.placement(), config.branch(), baseQuery, visitorId, merged, null, null);
+                var prods = enrichmentService.enrich(sr.products());
                 String msg = prods.isEmpty() ? "No products found." : (prods.size() == 1 ? "I found 1 product matching your request." : "I found " + prods.size() + " products matching your request.");
                 return new AutoRunResult(prods, msg, merged);
             }
             String query = (baseQuery + " " + value).trim();
-            var prods = searchClient.search(config.placement(), config.branch(), query, visitorId, session);
-            prods = enrichmentService.enrich(prods);
+            SearchResult sr = initialCatalogAggregator.searchCatalog(
+                    config.placement(), config.branch(), query, visitorId, session, null, null);
+            var prods = enrichmentService.enrich(sr.products());
             String msg = prods.isEmpty() ? "No products found." : (prods.size() == 1 ? "I found 1 product matching your request." : "I found " + prods.size() + " products matching your request.");
             return new AutoRunResult(prods, msg, session);
         } catch (Exception e) {

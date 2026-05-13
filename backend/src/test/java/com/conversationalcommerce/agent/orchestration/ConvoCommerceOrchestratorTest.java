@@ -4,10 +4,12 @@ import com.conversationalcommerce.agent.agent.AgentResponse;
 import com.conversationalcommerce.agent.agent.SearchResult;
 import com.conversationalcommerce.agent.agent.ConversationalCommerceAdapter;
 import com.conversationalcommerce.agent.agent.ConversationalCommerceClient;
+import com.conversationalcommerce.agent.agent.InitialCatalogAggregator;
 import com.conversationalcommerce.agent.agent.ProductEnrichmentService;
 import com.conversationalcommerce.agent.agent.ProductPoolNarrower;
 import com.conversationalcommerce.agent.agent.RetailSearchClient;
 import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
+import com.conversationalcommerce.agent.orchestration.RetailProductApiGate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -31,7 +33,11 @@ class ConvoCommerceOrchestratorTest {
 
         stubClient = new StubConversationalCommerceClient();
         stubSearchClient = new StubRetailSearchClient();
-        var adapter = new ConversationalCommerceAdapter(stubClient, stubSearchClient, new ProductEnrichmentService(Optional.empty()), config, Optional.empty(), new ProductPoolNarrower(), null);
+        config.setInitialCatalogFetchAllPages(false);
+        config.setInitialCatalogParallelPageFetches(false);
+        config.setRetailSingleShotPerConversation(false);
+        var gate = new RetailProductApiGate(config);
+        var adapter = new ConversationalCommerceAdapter(stubClient, new ProductEnrichmentService(Optional.empty(), config), config, Optional.empty(), new ProductPoolNarrower(), null, new InitialCatalogAggregator(stubSearchClient, config, gate));
         orchestrator = new ConvoCommerceOrchestrator(adapter);
     }
 
@@ -79,7 +85,7 @@ class ConvoCommerceOrchestratorTest {
         }
 
         @Override
-        public SearchResult searchWithPagination(String placement, String branch, String query, String visitorId, String filter, String pageToken, Integer pageSizeOverride) {
+        public SearchResult searchWithPagination(String placement, String branch, String query, String visitorId, String filter, String pageToken, Integer pageSizeOverride, Integer offset) {
             return SearchResult.of(products);
         }
     }

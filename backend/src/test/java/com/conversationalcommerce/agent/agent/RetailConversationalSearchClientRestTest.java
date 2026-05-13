@@ -2,6 +2,7 @@ package com.conversationalcommerce.agent.agent;
 
 import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
 import com.conversationalcommerce.agent.config.GcpCredentialsProvider;
+import com.conversationalcommerce.agent.orchestration.RetailProductApiGate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -24,7 +25,7 @@ class RetailConversationalSearchClientRestTest {
         config.setPlacement("projects/p/locations/global/catalogs/default_catalog/placements/default_search");
         config.setBranch("projects/p/locations/global/catalogs/default_catalog/branches/default_branch");
         config.setConversationalFilteringMode("ENABLED");
-        var resolver = new BrandDisplayResolver(config, null);
+        var resolver = new BrandDisplayResolver(config, null, new RetailProductApiGate(config));
         client = new RetailConversationalSearchClientRest(config, null, resolver);
     }
 
@@ -151,7 +152,7 @@ class RetailConversationalSearchClientRestTest {
         config.setAttributeDisplayMapping(java.util.Map.of(
                 "storageType", java.util.Map.of("S", "Ambient", "R", "Refrigerated", "D", "Dry storage")
         ));
-        var resolver = new BrandDisplayResolver(config, null);
+        var resolver = new BrandDisplayResolver(config, null, new RetailProductApiGate(config));
         client = new RetailConversationalSearchClientRest(config, null, resolver);
 
         String json = """

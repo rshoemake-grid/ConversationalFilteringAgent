@@ -1,5 +1,6 @@
 package com.conversationalcommerce.agent.agent;
 
+import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -9,9 +10,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ProductEnrichmentServiceTest {
 
+    private static ConversationalCommerceConfig cfg() {
+        return new ConversationalCommerceConfig();
+    }
+
     @Test
     void enrich_returnsAsIsWhenProductFetcherEmpty() {
-        var service = new ProductEnrichmentService(Optional.empty());
+        var service = new ProductEnrichmentService(Optional.empty(), cfg());
         var products = List.of(
                 AgentResponse.ProductResult.of("p1", "Product", "", "", null)
         );
@@ -46,7 +51,7 @@ class ProductEnrichmentServiceTest {
                 return Optional.empty();
             }
         };
-        var service = new ProductEnrichmentService(Optional.of(fetcher));
+        var service = new ProductEnrichmentService(Optional.of(fetcher), cfg());
         var products = List.of(
                 new AgentResponse.ProductResult(
                         "projects/p/products/6052075",
@@ -85,7 +90,7 @@ class ProductEnrichmentServiceTest {
                 return Optional.empty();
             }
         };
-        var service = new ProductEnrichmentService(Optional.of(fetcher));
+        var service = new ProductEnrichmentService(Optional.of(fetcher), cfg());
         var products = List.of(
                 AgentResponse.ProductResult.of("p1", "Full Product", "Has desc", "$10", null)
         );
@@ -93,5 +98,29 @@ class ProductEnrichmentServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).detailsFetched()).isFalse();
         assertThat(callCount[0]).isZero();
+    }
+
+    @Test
+    void enrich_preservesOrderWhenMultipleNeedEnrichment() {
+        var fetcher = new ProductFetcher() {
+            @Override
+            public Optional<AgentResponse.ProductResult> getProduct(String productName) {
+                return Optional.of(new AgentResponse.ProductResult(
+                        productName, "enriched", "d", "$1", null, null, null, null, null, null, null, null, null, null, true));
+            }
+        };
+        var service = new ProductEnrichmentService(Optional.of(fetcher), cfg());
+        var products = List.of(
+                new AgentResponse.ProductResult("projects/x/branches/b/products/id-a", "t", "", "", null, null, null, null, null, null, null, null, null, null, false),
+                new AgentResponse.ProductResult("projects/x/branches/b/products/id-b", "t", "", "", null, null, null, null, null, null, null, null, null, null, false),
+                new AgentResponse.ProductResult("projects/x/branches/b/products/id-c", "t", "", "", null, null, null, null, null, null, null, null, null, null, false)
+        );
+        var result = service.enrich(products);
+        assertThat(result).extracting(AgentResponse.ProductResult::id).containsExactly(
+                "projects/x/branches/b/products/id-a",
+                "projects/x/branches/b/products/id-b",
+                "projects/x/branches/b/products/id-c");
+        assertThat(result).extracting(AgentResponse.ProductResult::detailsFetched).containsExactly(true, true, true);
+        assertThat(result).extracting(AgentResponse.ProductResult::description).containsExactly("d", "d", "d");
     }
 }

@@ -44,9 +44,9 @@ export interface Message {
   productTotalSize?: number;
   /** True when productTotalSize is approximated (pages×pageSize) from raw search */
   productTotalSizeIsApproximate?: boolean;
-  /** Token for load-more (next page) */
+  /** @deprecated Not used for Retail listing; backend merges pages on first search only */
   productNextPageToken?: string;
-  /** Filter used (for load-more to reuse) */
+  /** Retail filter from last response (context; no Retail load-more) */
   productFilter?: string;
   /** Clarifying question shown after products (e.g. "Would you like 12oz or 24oz?") */
   clarifyingQuestion?: string;
@@ -67,11 +67,11 @@ export interface ChatRequest {
   previousSuggestedAnswers?: SuggestedAnswer[];
   /** Previous refined query (for RETAIL_IRRELEVANT recovery when user says Any/no preference) */
   previousRefinedQuery?: string;
-  /** Token for load-more (next page of products) */
+  /** @deprecated Ignored for Retail; do not use for Google paging */
   productPageToken?: string;
-  /** Filter from previous product response (for load-more) */
+  /** Filter from previous response (context only) */
   previousProductFilter?: string;
-  /** Products per page (null = use backend config default) */
+  /** Hint for UI/heuristics only; does not cap initial catalog or trigger Retail paging */
   productPageSize?: number;
   /**
    * Echo the last VAISR product grid for in-memory refinement (follow-up turns).
@@ -99,9 +99,9 @@ export interface ChatResponse {
   productTotalSize?: number;
   /** True when productTotalSize is approximated */
   productTotalSizeIsApproximate?: boolean;
-  /** Token for load-more (next page) */
+  /** @deprecated Rarely set; no Retail listing continuation in this app */
   productNextPageToken?: string;
-  /** Filter used for search (for load-more) */
+  /** Retail filter for the initial merged listing (session / merge context) */
   productFilter?: string;
   /** Clarifying question shown after products */
   clarifyingQuestion?: string;

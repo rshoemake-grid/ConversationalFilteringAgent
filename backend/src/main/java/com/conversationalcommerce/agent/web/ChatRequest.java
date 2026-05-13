@@ -15,9 +15,9 @@ public record ChatRequest(
         @Schema(description = "Previous assistant message text (for no-products fallback when user retries a suggested answer)") String previousAssistantText,
         @Schema(description = "Previous assistant suggested answers (for no-products fallback)") java.util.List<SuggestedAnswerInput> previousSuggestedAnswers,
         @Schema(description = "Previous refined query (for RETAIL_IRRELEVANT recovery when user says Any/no preference)") String previousRefinedQuery,
-        @Schema(description = "Token for load-more (next page of products)") String productPageToken,
-        @Schema(description = "Filter from previous product response (for load-more)") String previousProductFilter,
-        @Schema(description = "Products per page (overrides config; null = use config default)") Integer productPageSize,
+        @Schema(description = "Deprecated: ignored for Retail listing. Full product pages are merged on the first search; do not use for Google load-more.") String productPageToken,
+        @Schema(description = "Filter from previous product response (legacy; pairing with productPageToken)") String previousProductFilter,
+        @Schema(description = "Hint for UI heuristics (approximate totals, chip suppression). Does not cap initial catalog merge or trigger Retail continuation.") Integer productPageSize,
         @Schema(description = "Products from the last VAISR search to refine in memory (follow-up turns). Omit on first catalog search.") java.util.List<ProductPoolInput> productPool,
         @Schema(description = "When productPool is sent, apply Vertex AI semantic reranking when useful (default true). Set false to skip.") Boolean useSemanticReranking
 ) {

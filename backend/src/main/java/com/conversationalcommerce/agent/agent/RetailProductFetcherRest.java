@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 
@@ -22,9 +23,13 @@ public class RetailProductFetcherRest implements ProductFetcher {
 
     private static final Logger log = LoggerFactory.getLogger(RetailProductFetcherRest.class);
     private static final String BASE_URL = "https://retail.googleapis.com/v2";
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(15);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(120);
 
     private final GcpCredentialsProvider credentialsProvider;
-    private final java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder().build();
+    private final java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
+            .connectTimeout(CONNECT_TIMEOUT)
+            .build();
 
     public RetailProductFetcherRest(GcpCredentialsProvider credentialsProvider) {
         this.credentialsProvider = credentialsProvider;
@@ -43,6 +48,7 @@ public class RetailProductFetcherRest implements ProductFetcher {
 
             var requestBuilder = java.net.http.HttpRequest.newBuilder()
                     .uri(URI.create(url))
+                    .timeout(REQUEST_TIMEOUT)
                     .header("Authorization", "Bearer " + token);
             String quotaProject = credentialsProvider.getQuotaProject();
             if (quotaProject != null && !quotaProject.isEmpty()) {

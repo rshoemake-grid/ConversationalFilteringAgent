@@ -34,7 +34,7 @@ public interface RetailSearchClient {
             String visitorId,
             String filter
     ) {
-        return searchWithPagination(placement, branch, query, visitorId, filter, null).products();
+        return searchWithPagination(placement, branch, query, visitorId, filter, null, null).products();
     }
 
     /**
@@ -51,11 +51,15 @@ public interface RetailSearchClient {
             String filter,
             String pageToken
     ) {
-        return searchWithPagination(placement, branch, query, visitorId, filter, pageToken, null);
+        return searchWithPagination(placement, branch, query, visitorId, filter, pageToken, null, null);
     }
 
-    /** Overload with page size override for per-request control. */
-    SearchResult searchWithPagination(
+    /**
+     * @param pageToken optional continuation token (mutually exclusive with {@code offset} on the Retail API)
+     * @param pageSizeOverride page size (null = config default)
+     * @param offset when non-null and &gt;= 0, Retail Search uses offset-based paging instead of {@code pageToken}
+     */
+    default SearchResult searchWithPagination(
             String placement,
             String branch,
             String query,
@@ -63,5 +67,18 @@ public interface RetailSearchClient {
             String filter,
             String pageToken,
             Integer pageSizeOverride
+    ) {
+        return searchWithPagination(placement, branch, query, visitorId, filter, pageToken, pageSizeOverride, null);
+    }
+
+    SearchResult searchWithPagination(
+            String placement,
+            String branch,
+            String query,
+            String visitorId,
+            String filter,
+            String pageToken,
+            Integer pageSizeOverride,
+            Integer offset
     );
 }

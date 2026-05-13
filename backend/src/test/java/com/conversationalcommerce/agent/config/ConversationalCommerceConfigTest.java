@@ -39,4 +39,22 @@ class ConversationalCommerceConfigTest {
         config.setProductSearchPageSize(-1);
         assertThat(config.productSearchPageSize()).isEqualTo(20);
     }
+
+    @Test
+    void initialCatalog_defaultsMatchPoC() {
+        var config = new ConversationalCommerceConfig();
+        assertThat(config.initialCatalogPageSize()).isEqualTo(100);
+        assertThat(config.initialCatalogFetchAllPages()).isTrue();
+        assertThat(config.initialCatalogMaxProducts()).isEqualTo(1000);
+        assertThat(config.initialCatalogSuppressNextPageToken()).isTrue();
+        assertThat(config.initialCatalogParallelPageFetches()).isTrue();
+        assertThat(config.initialCatalogMaxConcurrentRequests()).isEqualTo(8);
+    }
+
+    @Test
+    void initialCatalogPageSize_clampedTo100() {
+        var config = new ConversationalCommerceConfig();
+        config.setInitialCatalogPageSize(500);
+        assertThat(config.initialCatalogPageSize()).isEqualTo(100);
+    }
 }

@@ -14,6 +14,7 @@ flowchart LR
   subgraph app [This repository]
     API[Spring Boot /api/chat]
     Adapter[ConversationalCommerceAdapter]
+    Agg[InitialCatalogAggregator]
     ConvoClient[ConversationalCommerceClient]
     SearchClient[RetailSearchClient]
   end
@@ -26,13 +27,14 @@ flowchart LR
   API --> Adapter
   Adapter --> ConvoClient
   ConvoClient --> CS
-  Adapter --> SearchClient
+  Adapter --> Agg
+  Agg --> SearchClient
   SearchClient --> RS
   Adapter --> PG
 ```
 
 - **Frontend** (`frontend/`): `ChatInterface`, `useChat`, `POST /api/chat` (often via Vite proxy to `/api`).
-- **Backend** (`backend/`): `ChatController` → `OrchestratorService` → mode-specific orchestrator → `ConversationalCommerceAdapter` (for conversational commerce) or ADK runner (for Approach B).
+- **Backend** (`backend/`): `ChatController` → `OrchestratorService` → mode-specific orchestrator → `ConversationalCommerceAdapter` (for conversational commerce) or ADK runner (for Approach B). **`InitialCatalogAggregator`** performs the **Retail Search** merge for the first product listing per refined query; **`ConversationalCommerceAdapter`** does not call **`RetailSearchClient`** for pagination after that.
 - **GCP**: Catalog and search configuration live in your project (placement, branch). The app does not ship a product database; it calls Retail APIs using service account credentials.
 
 ## Configuration at a glance

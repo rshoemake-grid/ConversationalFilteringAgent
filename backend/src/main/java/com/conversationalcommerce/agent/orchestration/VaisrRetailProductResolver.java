@@ -5,7 +5,7 @@ import com.conversationalcommerce.agent.agent.ClarifyingFollowUpPolicy;
 import com.conversationalcommerce.agent.agent.ConversationalCommerceClient;
 import com.conversationalcommerce.agent.agent.StockTypeRetailFilter;
 import com.conversationalcommerce.agent.agent.ProductEnrichmentService;
-import com.conversationalcommerce.agent.agent.RetailSearchClient;
+import com.conversationalcommerce.agent.agent.InitialCatalogAggregator;
 import com.conversationalcommerce.agent.agent.SearchResult;
 import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
 import com.conversationalcommerce.agent.gemini.ClarifyingQuestionGenerator;
@@ -45,17 +45,17 @@ public class VaisrRetailProductResolver {
             "DOESNT MATTER", "WHATEVER", "I DON'T CARE", "IDC"
     );
 
-    private final RetailSearchClient searchClient;
+    private final InitialCatalogAggregator initialCatalogAggregator;
     private final ProductEnrichmentService enrichmentService;
     private final ConversationalCommerceConfig config;
     private final Optional<ClarifyingQuestionGenerator> clarifyingGenerator;
 
     public VaisrRetailProductResolver(
-            RetailSearchClient searchClient,
+            InitialCatalogAggregator initialCatalogAggregator,
             ProductEnrichmentService enrichmentService,
             ConversationalCommerceConfig config,
             Optional<ClarifyingQuestionGenerator> clarifyingGenerator) {
-        this.searchClient = searchClient;
+        this.initialCatalogAggregator = initialCatalogAggregator;
         this.enrichmentService = enrichmentService;
         this.config = config;
         this.clarifyingGenerator = clarifyingGenerator != null ? clarifyingGenerator : Optional.empty();
@@ -83,7 +83,6 @@ public class VaisrRetailProductResolver {
             String userMessage,
             Map<String, Object> context) {
         String visitorId = ContextUtils.getVisitorId(context, config.defaultVisitorId());
-        String productPageToken = (String) context.get("productPageToken");
         Integer productPageSizeOverride = context.get("productPageSize") instanceof Number n ? n.intValue() : null;
 
         String imageBase64 = (String) context.get("imageBase64");
@@ -129,16 +128,14 @@ public class VaisrRetailProductResolver {
                 }
                 filter = combineRetailFilters(sanitizeSessionProductFilter((String) context.get("previousProductFilter")), filter);
                 productFilterUsed = filter;
-                String pageToken = (productPageToken != null && !productPageToken.isBlank()) ? productPageToken : null;
-                searchResult = searchClient.searchWithPagination(
+                searchResult = initialCatalogAggregator.searchCatalog(
                         config.placement(),
                         config.branch(),
                         searchQuery,
                         visitorId,
                         filter,
-                        pageToken,
-                        productPageSizeOverride
-                );
+                        null,
+                        null);
                 products = enrichmentService.enrich(searchResult.products());
             } catch (Exception e) {
                 log.warn("ADK retail product search failed: {}", e.getMessage());
@@ -192,9 +189,10 @@ public class VaisrRetailProductResolver {
                             String stFilter = combineRetailFilters(
                                     sanitizeSessionProductFilter((String) context.get("previousProductFilter")),
                                     buildStorageTypeFilter(filterValue));
-                            List<AgentResponse.ProductResult> autoProducts = searchClient.search(
-                                    config.placement(), config.branch(), prevRefined.trim(), visitorId, stFilter);
-                            autoProducts = enrichmentService.enrich(autoProducts);
+                            List<AgentResponse.ProductResult> autoProducts =
+                                    enrichmentService.enrich(initialCatalogAggregator.searchCatalog(
+                                            config.placement(), config.branch(), prevRefined.trim(), visitorId, stFilter,
+                                            null, null).products());
                             products = autoProducts;
                             productFilterUsed = stFilter;
                             if (!autoProducts.isEmpty()) {

@@ -232,7 +232,7 @@ For a **deeper explanation** of the GCP **conversational search** + **Retail Sea
 3. Backend `ChatController` → `OrchestratorService` → `ConvoCommerceOrchestrator` or `AdkOrchestrator`.
 4. Orchestrator calls `ConversationalCommerceAdapter.sendMessage` (or tools for ADK).
 5. `RetailConversationalSearchClientRest` calls GCP `conversationalSearch`, parses response.
-6. If `refinedQuery` present, `RetailSearchClient` runs product search.
+6. If `refinedQuery` present, **`InitialCatalogAggregator`** runs the merged **first** catalog listing (multi-page per `initial-catalog-*`); **`ConversationalCommerceAdapter`** does not call **`RetailSearchClient`** for listing continuation.
 7. Response built as `AgentResponse` → `ChatResponse`.
 8. Frontend appends assistant message, filters failed suggested answers, slices by `maxSuggestedAnswers`.
 9. **No-preference recovery**: When the user says "Any", "no", or "no preference" and the API returns empty `refinedQuery`, the backend uses `previousRefinedQuery` from context to run a product search. Handles both RETAIL_IRRELEVANT and SIMPLE_PRODUCT_SEARCH regression (e.g. API asks stock type again after the user selected "Any" for rice refinement).
@@ -262,6 +262,13 @@ See [CONFIG.md](CONFIG.md) for credentials and environment variables.
 | `app.gemini.referer` | localhost:5173 | For restricted API keys |
 | `conversational-commerce.transport` | rest | rest \| grpc |
 | `conversational-commerce.conversational-filtering-mode` | ENABLED | ENABLED \| DISABLED |
+| `conversational-commerce.initial-catalog-page-size` | 100 | Page size per Retail Search request on first catalog fill (max 100). |
+| `conversational-commerce.initial-catalog-fetch-all-pages` | true | Merge pages on first fill until caps. |
+| `conversational-commerce.initial-catalog-max-products` | 1000 | Stop merging after this many unique products. |
+| `conversational-commerce.initial-catalog-max-page-requests` | 100 | Safety cap on page requests per first fill. |
+| `conversational-commerce.initial-catalog-suppress-next-page-token` | true | Omit next token so clients page **`products`** locally (no Retail listing continuation). |
+| `conversational-commerce.initial-catalog-parallel-page-fetches` | true | Use parallel Retail **`offset`** requests for the merged first listing (see product-search doc). |
+| `conversational-commerce.initial-catalog-max-concurrent-requests` | 8 | Pool size for parallel catalog fetches (max 64). |
 
 **Frontend:**
 
