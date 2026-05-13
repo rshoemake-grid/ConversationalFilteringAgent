@@ -356,6 +356,42 @@ class ConversationalCommerceAdapterTest {
     }
 
     @Test
+    void sendMessage_whenAgentAsksStockPreferenceWithManyProducts_retainsStorageChips() {
+        config.setProductCountThreshold(8);
+        stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
+                "What type of stock do you prefer?",
+                "conv-1",
+                "rice",
+                "SIMPLE_PRODUCT_SEARCH",
+                "agent",
+                null,
+                List.of(
+                        new ConversationalCommerceClient.SuggestedAnswer("Ambient", "S"),
+                        new ConversationalCommerceClient.SuggestedAnswer("Refrigerated", "R"),
+                        new ConversationalCommerceClient.SuggestedAnswer("Dry storage", "D"))
+        ));
+        var manyProducts = List.of(
+                AgentResponse.ProductResult.of("p1", "Rice 1", "Desc", "$5", null),
+                AgentResponse.ProductResult.of("p2", "Rice 2", "Desc", "$6", null),
+                AgentResponse.ProductResult.of("p3", "Rice 3", "Desc", "$7", null),
+                AgentResponse.ProductResult.of("p4", "Rice 4", "Desc", "$8", null),
+                AgentResponse.ProductResult.of("p5", "Rice 5", "Desc", "$9", null),
+                AgentResponse.ProductResult.of("p6", "Rice 6", "Desc", "$10", null),
+                AgentResponse.ProductResult.of("p7", "Rice 7", "Desc", "$11", null),
+                AgentResponse.ProductResult.of("p8", "Rice 8", "Desc", "$12", null),
+                AgentResponse.ProductResult.of("p9", "Rice 9", "Desc", "$13", null)
+        );
+        stubSearchClient.setProducts(manyProducts);
+
+        AgentResponse response = adapter.sendMessage("", "rice", Map.of());
+
+        assertThat(response.products()).hasSize(9);
+        assertThat(response.clarifyingQuestion()).contains("What type of stock do you prefer?");
+        assertThat(response.suggestedAnswers()).extracting(ConversationalCommerceClient.SuggestedAnswer::value)
+                .containsExactlyInAnyOrder("S", "R", "D");
+    }
+
+    @Test
     void sendMessage_convoCommerceMode_usesApiResponseWhenManyProducts() {
         config.setProductCountThreshold(8);
         var stubGenerator = new ClarifyingQuestionGenerator(null, null) {

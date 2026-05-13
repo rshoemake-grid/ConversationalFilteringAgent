@@ -363,9 +363,10 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
         }
 
         // GCP often echoes stock/storage facet chips on the same turn as product hits (including after the user
-        // picked a storage type). Strip those whenever we return products; empty-result re-ask paths above keep
-        // storage suggestions. Non-storage chips (e.g. brands) are preserved.
-        if (productsToReturn != null && !productsToReturn.isEmpty()) {
+        // picked a storage type). Strip those when we return products unless the clarifying line asks about
+        // stock/storage (S/R/D chips are then valid answers). Non-storage chips (e.g. brands) are always preserved.
+        if (productsToReturn != null && !productsToReturn.isEmpty()
+                && !ClarifyingFollowUpPolicy.clarifyingQuestionImpliesStorageChoice(clarifyingQuestion)) {
             suggestedAnswers = ClarifyingFollowUpPolicy.withoutStorageSuggestions(suggestedAnswers);
         }
 

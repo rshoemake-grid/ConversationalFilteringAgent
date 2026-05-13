@@ -42,12 +42,13 @@ flowchart TB
 |-------------|------------------------------|-------------------|
 | **Types a message and sends** | `message`, `mode`, `conversationId`, `sessionId`, optional context fields | Full turn through the active orchestrator (below). |
 | **Clicks a suggested-answer chip** | `message` = chip **value** (e.g. storage code), `previousAssistantText`, `previousSuggestedAnswers`, `previousRefinedQuery`, `previousProductFilter` as needed | Same as a normal turn; adapter or VAISR resolver uses prior context for filters, recovery, and re-asks. |
-| **Clicks Load more** (legacy) | `productPageToken`, `previousRefinedQuery`, … | **No Retail Search.** Adapter returns a short message; products are merged only on the **first** listing ([product-search-and-retail-apis.md](product-search-and-retail-apis.md)). Prefer **local paging** of `products`. |
+| **Clicks Load more** (legacy token path) | `productPageToken`, `previousRefinedQuery`, … | **No Retail Search.** Adapter returns a short message; products are merged only on the **first** listing ([product-search-and-retail-apis.md](product-search-and-retail-apis.md)). |
+| **Clicks Show more** (default UI) | *(no extra request)* | Reveals the next slice of the **`products`** array already returned; **`productPageSize`** is the slice size. Used when **`productNextPageToken`** is omitted ([frontend-and-chat-api.md](frontend-and-chat-api.md)). |
 | **Attaches an image** | `imageBase64` (+ optional text) | **Conversational** request includes image; product listing still comes from **Retail Search** when a refined query is available. |
 | **Uses voice** | Same as text after the browser transcribes speech to a string | No separate backend “voice service”; it is a text message. Chrome-only UX: [frontend-and-chat-api.md](frontend-and-chat-api.md). |
 | **Get more suggestions** (if exposed) | Depends on implementation; may repeat or extend conversational context | Usually another conversational turn or client-driven cap change. |
 
-The UI also **suppresses redundant storage chips** after product results and honors an **explicit empty** `suggestedAnswers` list (so stale facets are not re-read from `rawResponse`). See [frontend-and-chat-api.md](frontend-and-chat-api.md) and `useChat.ts`.
+The UI **suppresses redundant facet chips** when the catalog total fits one page—**but not** for real follow-ups (`clarifyingQuestion`, or **`text`** containing **`?`**). It honors an **explicit empty** `suggestedAnswers` list (no recovery from `rawResponse` that turn). See [frontend-and-chat-api.md](frontend-and-chat-api.md) and `useChat.ts` / `suggestionVisibility.ts`.
 
 ---
 
@@ -67,7 +68,7 @@ The UI also **suppresses redundant storage chips** after product results and hon
 | 6 | Optionally **`VertexAiRankingService`** | **Vertex AI** ranking API when configured (`VertexAiRankingConfig`). |
 | 7 | Adapter applies policies (clarifying follow-up, storage recovery, pagination metadata, stripping echoed storage chips when products are returned, etc.). | |
 
-**First catalog fill (PoC):** backend **`initial-catalog-*`** settings control how many pages/products are merged; responses usually omit **`productNextPageToken`** so the UI **pages `products` locally**—there is **no** Retail listing continuation. See [product-search-and-retail-apis.md](product-search-and-retail-apis.md).
+**First catalog fill (PoC):** backend **`initial-catalog-*`** settings control how many pages/products are merged; responses usually omit **`productNextPageToken`** so the UI **pages `products` locally** (e.g. **Show more** in the React client)—there is **no** Retail listing continuation. See [product-search-and-retail-apis.md](product-search-and-retail-apis.md).
 
 **Legacy `productPageToken`:** no **Retail Search** and no conversational search; see [product-search-and-retail-apis.md](product-search-and-retail-apis.md).
 

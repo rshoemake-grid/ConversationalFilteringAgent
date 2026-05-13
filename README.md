@@ -118,6 +118,7 @@ Response:
 | [docs/README.md](docs/README.md) | **Start here** — index of topic guides (GCP two-call flow, modes, frontend/API) |
 | [docs/api-reference.md](docs/api-reference.md) | **REST API** — `/api/chat`, `/api/models`, OpenAPI/Swagger, errors |
 | [docs/user-flow-and-services.md](docs/user-flow-and-services.md) | User flows and which services (Retail, Gemini, tools) run per mode |
+| [frontend/README.md](frontend/README.md) | **Frontend** — Vite, Show more / chips / popover, `npm test` |
 | [CODE.md](CODE.md) | Code architecture, API reference, data models, key flows |
 | [DEPLOY.md](DEPLOY.md) | Docker, Kubernetes, Docker Compose, GCP credentials, CI/CD |
 | [CONFIG.md](CONFIG.md) | API keys, environment variables, local setup |

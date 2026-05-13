@@ -58,7 +58,7 @@ All JSON APIs use **`application/json`**.
 | **`previousRefinedQuery`** | string | No | Last refined search string (e.g. “Any” / no-preference recovery). |
 | **`productPageToken`** | string | No | **Deprecated:** not used for Retail. If sent with **`previousRefinedQuery`**, server returns a short message and **no** new products ([product-search-and-retail-apis.md](product-search-and-retail-apis.md)). |
 | **`previousProductFilter`** | string | No | Retail filter from last response (`productFilter`), echoed for context; not used for Retail list continuation. |
-| **`productPageSize`** | integer | No | Hint for UI / response heuristics only; does **not** cap the first catalog merge or call Retail for paging ([product-search-and-retail-apis.md](product-search-and-retail-apis.md)). |
+| **`productPageSize`** | integer | No | **Server:** heuristics (e.g. totals, when to omit redundant facet chips in the pipeline). **Web client:** initial visible product count and **Show more** increment when the response has no **`productNextPageToken`**. Does **not** cap the backend’s first catalog merge or trigger Retail listing continuation ([product-search-and-retail-apis.md](product-search-and-retail-apis.md), [frontend-and-chat-api.md](frontend-and-chat-api.md)). |
 | **`productPool`** | array of **product-like objects** | No | Products from the last grid for **in-memory refinement** (`ProductPoolInput` in Java mirrors **`ProductDto`** fields). |
 | **`useSemanticReranking`** | boolean | No | When **`productPool`** is sent: allow Vertex semantic reranking (default true if omitted in business logic). |
 
@@ -80,7 +80,7 @@ All JSON APIs use **`application/json`**.
 | **`productTotalSizeIsApproximate`** | boolean? | True when total is estimated from pages. |
 | **`productNextPageToken`** | string? | Rarely set. This app does **not** call Retail for listing continuation; prefer **local paging** of **`products`**. May be omitted when `conversational-commerce.initial-catalog-suppress-next-page-token` is true—see [product-search-and-retail-apis.md](product-search-and-retail-apis.md). |
 | **`productFilter`** | string? | Retail filter used for the **initial** merged listing (session echo). |
-| **`clarifyingQuestion`** | string? | Follow-up question often shown after the product grid. |
+| **`clarifyingQuestion`** | string? | Follow-up question often shown after the product grid, with **`suggestedAnswers`** as chips. The UI also shows chips when **`text`** contains **`?`** even if this field is omitted ([frontend-and-chat-api.md](frontend-and-chat-api.md)). |
 
 **`ProductDto`** (response) includes at least: `id`, `title`, `description`, `price`, optional `imageUri`, `gtin`, `productId`, `categories`, `brands`, `uri`, `availability`, `sizes`, `materials`, `attributes`, `detailsFetched`. See **`ChatResponse.ProductDto`** in code; **`id`** is the Retail resource **name** when returned by search (used for optional **Product.get** enrichment).
 

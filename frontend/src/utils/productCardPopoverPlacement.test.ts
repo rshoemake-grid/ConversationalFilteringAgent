@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { clampPopoverCenterX, VIEWPORT_MARGIN } from './productCardPopoverPlacement';
+import { clampPopoverCenterX, estimateProductDetailPopoverWidth, VIEWPORT_MARGIN } from './productCardPopoverPlacement';
+
+describe('estimateProductDetailPopoverWidth', () => {
+  it('matches min(320, 90% of viewport)', () => {
+    expect(estimateProductDetailPopoverWidth(400)).toBe(320);
+    expect(estimateProductDetailPopoverWidth(200)).toBe(180);
+  });
+});
 
 describe('clampPopoverCenterX', () => {
   it('keeps center when popover fits with room on both sides', () => {

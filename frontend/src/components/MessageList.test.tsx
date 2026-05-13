@@ -159,6 +159,33 @@ describe('MessageList', () => {
     expect(screen.getByText('(agent)')).toBeInTheDocument()
   })
 
+  it('shows suggested answers under products when content has a question but clarifyingQuestion is absent', () => {
+    const onSuggestedAnswer = vi.fn()
+    render(
+      <MessageList
+        messages={[
+          {
+            id: '1',
+            role: 'assistant',
+            content: 'I found 2 products matching your request. What type of stock?',
+            products: [
+              { id: 'p1', title: 'Milk', description: '', price: '$1' },
+              { id: 'p2', title: 'Milk 2', description: '', price: '$2' },
+            ],
+            productTotalSize: 50,
+            suggestedAnswers: [
+              { displayText: 'Ambient', value: 'S' },
+              { displayText: 'Refrigerated', value: 'R' },
+            ],
+          },
+        ]}
+        onSuggestedAnswer={onSuggestedAnswer}
+      />
+    )
+    expect(screen.getByText('Ambient')).toBeInTheDocument()
+    expect(screen.getByText('Refrigerated')).toBeInTheDocument()
+  })
+
   it('renders multiple messages in order', () => {
     render(
       <MessageList

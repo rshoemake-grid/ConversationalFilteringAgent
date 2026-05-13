@@ -10,7 +10,7 @@ For **proof-of-concept / demo** deployments using the **catalog as the source li
 - By default the response **omits `productNextPageToken`** for that first population so the **web UI does not call Google for grid paging**—slice or page the **`products`** array in your **app/API layer** instead.
 - **Follow-up refinement** on the same thread in Approach A uses the **`productPool`** from the prior assistant message (see **[frontend-and-chat-api.md](frontend-and-chat-api.md)**) and **`refineInMemoryProductPool`** — conversational search still runs for intent, but the **shown products are narrowed only from the pool**, not a fresh full-catalog listing.
 
-`product-search-page-size` and **`productPageSize`** still influence **UI copy / heuristics** (e.g. approximate totals, single-page chip suppression). They do **not** cap the first catalog merge and are **not** used to call Retail for listing continuation.
+`product-search-page-size` and the request field **`productPageSize`** influence **server heuristics** (e.g. approximate totals, ingest-time rules for when to clear **`suggestedAnswers`**) and the **web client’s local product grid paging**: initial visible count and **Show more** step size when **`productNextPageToken`** is absent. They do **not** cap the first catalog merge on the server and are **not** used to call Retail for listing continuation.
 
 ## Two different Retail capabilities
 

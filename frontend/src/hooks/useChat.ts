@@ -7,7 +7,7 @@ import {
   suggestedAnswerDisplayLabel,
   suggestedAnswerSubmitValue,
 } from '../utils/suggestedAnswerDisplay';
-import { shouldHideSuggestedAnswersFromResponse } from '../utils/suggestionVisibility';
+import { shouldSuppressSuggestedAnswersWhenIngestingResponse } from '../utils/suggestionVisibility';
 import { stripSuggestionEchoLinesFromAssistantText } from '../utils/stripSuggestionEchoes';
 
 /** Persisted across browser sessions (Approach A vs B). */
@@ -408,10 +408,12 @@ export function useChat() {
           sessionProductFilterRef.current = response.productFilter;
         }
 
-        const suppressSuggestionChips = shouldHideSuggestedAnswersFromResponse(
+        const suppressSuggestionChips = shouldSuppressSuggestedAnswersWhenIngestingResponse(
           response.products,
           response.productTotalSize,
-          productPageSize
+          productPageSize,
+          response.clarifyingQuestion,
+          (response.text ?? '').includes('?')
         );
 
         setMessages((prev) => {

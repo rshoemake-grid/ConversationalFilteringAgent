@@ -29,5 +29,29 @@ export function shouldHideSuggestedAnswersForMessage(msg: Message, productPageSi
   if (msg.clarifyingQuestion?.trim()) {
     return false;
   }
+  if (msg.content?.includes('?')) {
+    return false;
+  }
   return shouldHideSuggestedAnswersForPage(msg, productPageSize);
+}
+
+/**
+ * When building the assistant message from the API response, empty suggestedAnswers only for the
+ * single-page facet-echo case — never when the server sent an explicit clarifying follow-up or a
+ * question in the main assistant text (some paths omit `clarifyingQuestion`).
+ */
+export function shouldSuppressSuggestedAnswersWhenIngestingResponse(
+  products: Message['products'] | undefined,
+  productTotalSize: number | undefined,
+  productPageSize: number,
+  clarifyingQuestion?: string | null,
+  assistantTextHasQuestion?: boolean
+): boolean {
+  if (clarifyingQuestion?.trim()) {
+    return false;
+  }
+  if (assistantTextHasQuestion) {
+    return false;
+  }
+  return shouldHideSuggestedAnswersFromResponse(products, productTotalSize, productPageSize);
 }

@@ -15,7 +15,7 @@ Narrative documentation for how the Conversational Filtering Agent works. Prefer
 
 | Document | Purpose |
 |----------|---------|
-| [../README.md](../README.md) | Quick start, prerequisites |
+| [../frontend/README.md](../frontend/README.md) | **Frontend-only** — Vite dev, UI behaviors (Show more, chips, popover) |
 | [../CONFIG.md](../CONFIG.md) | Credentials, env vars, GCP console setup |
 | [../CODE.md](../CODE.md) | Package layout, API shapes, configuration tables |
 | [../DEPLOY.md](../DEPLOY.md) | Docker, Kubernetes, CI |

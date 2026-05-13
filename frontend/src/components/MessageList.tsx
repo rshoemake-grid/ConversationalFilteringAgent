@@ -275,6 +275,45 @@ function MessageListComponent({
                   )}
                 </div>
               )}
+              {!msg.clarifyingQuestion?.trim() &&
+                msg.suggestedAnswers &&
+                msg.suggestedAnswers.length > 0 &&
+                onSuggestedAnswer &&
+                !hideSuggestions &&
+                msg.content?.includes('?') && (
+                <div className="message__suggested-answers message__suggested-answers--after-clarifying">
+                  {(maxSuggestedAnswers != null
+                    ? msg.suggestedAnswers.slice(0, maxSuggestedAnswers)
+                    : msg.suggestedAnswers
+                  ).map((answer, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className="message__suggested-answer"
+                      onClick={() => onSuggestedAnswer(answer)}
+                    >
+                      {suggestedAnswerDisplayLabel(answer)}
+                    </button>
+                  ))}
+                  {onGetMoreSuggestions &&
+                    !hideSuggestions &&
+                    msg.role === 'assistant' &&
+                    !msg.isError &&
+                    msg.suggestedAnswers &&
+                    msg.suggestedAnswers.length > 0 &&
+                    msg.id === [...messages].reverse().find((m) => m.role === 'assistant' && m.suggestedAnswers?.length)?.id && (
+                      <button
+                        type="button"
+                        className="message__get-more-suggestions"
+                        onClick={onGetMoreSuggestions}
+                        disabled={loading}
+                        aria-label="Get more suggested answers"
+                      >
+                        Get more suggestions
+                      </button>
+                    )}
+                </div>
+              )}
             </div>
             );
           })()}
@@ -283,7 +322,7 @@ function MessageListComponent({
           {msg.suggestedAnswers &&
             msg.suggestedAnswers.length > 0 &&
             onSuggestedAnswer &&
-            !msg.clarifyingQuestion &&
+            !msg.clarifyingQuestion?.trim() &&
             !hideSuggestions &&
             !hasProducts && (
             <div className="message__suggested-answers">

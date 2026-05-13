@@ -1,7 +1,7 @@
 import { memo, useState, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { ProductDto } from '../api/types';
-import { clampPopoverCenterX, VIEWPORT_MARGIN } from '../utils/productCardPopoverPlacement';
+import { clampPopoverCenterX, estimateProductDetailPopoverWidth, VIEWPORT_MARGIN } from '../utils/productCardPopoverPlacement';
 
 interface ProductCardProps {
   product: ProductDto;
@@ -21,74 +21,49 @@ function ProductCardComponent({ product: p, index }: ProductCardProps) {
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [popoverPlacement, setPopoverPlacement] = useState<{ left: number; bottom: number } | null>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
-    if (!isHovered || !anchorRef.current) {
+    if (!isHovered) {
       setAnchorRect(null);
-      return;
-    }
-    const el = anchorRef.current;
-    const update = () => setAnchorRect(el.getBoundingClientRect());
-    update();
-    if (typeof ResizeObserver !== 'undefined') {
-      const ob = new ResizeObserver(update);
-      ob.observe(el);
-      window.addEventListener('scroll', update, true);
-      return () => {
-        ob.disconnect();
-        window.removeEventListener('scroll', update, true);
-      };
-    }
-    window.addEventListener('scroll', update, true);
-    return () => window.removeEventListener('scroll', update, true);
-  }, [isHovered]);
-
-  useLayoutEffect(() => {
-    if (!isHovered || !anchorRect) {
       setPopoverPlacement(null);
       return;
     }
 
-    let ro: ResizeObserver | undefined;
-    let rafId = 0;
+    const el = anchorRef.current;
+    if (!el) {
+      return;
+    }
 
-    const update = () => {
-      const anchorEl = anchorRef.current;
-      const popEl = popoverRef.current;
-      if (!anchorEl || !popEl) return false;
-      const r = anchorEl.getBoundingClientRect();
-      const w = popEl.getBoundingClientRect().width;
-      const anchorCenterX = r.left + r.width / 2;
-      const left = clampPopoverCenterX(anchorCenterX, w, window.innerWidth, VIEWPORT_MARGIN);
-      const bottom = window.innerHeight - r.top + 8;
-      setPopoverPlacement({ left, bottom });
-      return true;
-    };
-
-    const start = () => {
-      if (update()) {
-        const popEl = popoverRef.current;
-        if (popEl && typeof ResizeObserver !== 'undefined') {
-          ro = new ResizeObserver(() => {
-            update();
-          });
-          ro.observe(popEl);
-        }
-        window.addEventListener('resize', update);
+    const apply = () => {
+      const target = anchorRef.current;
+      if (!target) {
         return;
       }
-      rafId = requestAnimationFrame(start);
+      const r = target.getBoundingClientRect();
+      setAnchorRect(r);
+      const vw = window.innerWidth;
+      const estW = estimateProductDetailPopoverWidth(vw);
+      const anchorCenterX = r.left + r.width / 2;
+      const left = clampPopoverCenterX(anchorCenterX, estW, vw, VIEWPORT_MARGIN);
+      const bottom = window.innerHeight - r.top + 8;
+      setPopoverPlacement({ left, bottom });
     };
 
-    start();
+    apply();
 
+    let resizeObserver: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(apply);
+      resizeObserver.observe(el);
+    }
+    window.addEventListener('scroll', apply, true);
+    window.addEventListener('resize', apply);
     return () => {
-      cancelAnimationFrame(rafId);
-      ro?.disconnect();
-      window.removeEventListener('resize', update);
+      resizeObserver?.disconnect();
+      window.removeEventListener('scroll', apply, true);
+      window.removeEventListener('resize', apply);
     };
-  }, [isHovered, anchorRect, p]);
+  }, [isHovered]);
 
   const hoverTarget = (
     <div
@@ -106,7 +81,6 @@ function ProductCardComponent({ product: p, index }: ProductCardProps) {
         anchorRect &&
         createPortal(
           <div
-            ref={popoverRef}
             className="product-card__detail-popover product-card__detail-popover--portal"
             role="tooltip"
             style={{

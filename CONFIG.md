@@ -147,7 +147,7 @@ If the agent keeps asking the same question (e.g. "Which brand would you prefer?
 
 ## 2c. PoC: large first catalog listing (initial merge)
 
-For demos where the **Retail catalog** stands in for a customer-supplied product API, the backend **merges** multiple Retail Search **pages** on the **first** listing for a refined query (deduplicated, capped). The app **does not** call Retail Search again for "load more" / **`productPageToken`**—page **`products`** in your own UI or API. Optionally **hide `productNextPageToken`** on that response. **Refinement** with **`productPool`** narrows only the list already returned.
+For demos where the **Retail catalog** stands in for a customer-supplied product API, the backend **merges** multiple Retail Search **pages** on the **first** listing for a refined query (deduplicated, capped). The app **does not** call Retail Search again for "load more" / **`productPageToken`**—page **`products`** in your own UI or API (the bundled React client uses **Show more** to reveal slices of the returned array; **`productPageSize`** sets the step). Optionally **hide `productNextPageToken`** on that response. **Refinement** with **`productPool`** narrows only the list already returned.
 
 Add under **`conversational-commerce`** in `application.yml` (defaults are in `application.yml.example`):
 

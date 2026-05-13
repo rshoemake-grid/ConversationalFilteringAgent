@@ -30,7 +30,7 @@ These align with what **`OrchestratorService`** puts in the adapter **context**:
 | `previousRefinedQuery` | Used for no-preference recovery and related logic |
 | `productPageToken` | **Deprecated;** if sent, backend does **not** call Retail—see [product-search-and-retail-apis.md](product-search-and-retail-apis.md) |
 | `previousProductFilter` | Prior Retail filter (context / session merge) |
-| `productPageSize` | UI / heuristic hint only |
+| `productPageSize` | **Server:** heuristics (totals, suggested-answer ingest rules). **Client:** initial visible product count and **Show more** step when there is no **`productNextPageToken`**. |
 | `productPool` | **In-memory refinement:** products from the last assistant grid; the backend narrows **only within this list** (no fresh full-catalog search for that step). |
 | `useSemanticReranking` | When `productPool` is sent: allow Vertex semantic reranking (server default applies if omitted). |
 
@@ -43,6 +43,29 @@ Exact Java types and validation: **`ChatRequest.java`**, **`ChatController.java`
 On the **first** catalog population, **`productNextPageToken`** is usually **omitted**; page **`products`** in the app. **`productPageToken`** on requests does **not** trigger further Retail listing ([product-search-and-retail-apis.md](product-search-and-retail-apis.md)).
 
 See **[CODE.md](../CODE.md)** for example JSON and frontend **Message** / **ProductDto** types.
+
+## Product grid: local paging vs “Load more”
+
+The web UI (`MessageList`) reconciles two behaviors:
+
+- **No `productNextPageToken` (typical PoC listing):** the client keeps the full **`products`** array but initially shows only **`productPageSize`** items (default **20**), with a **Show more** control that reveals the next slice until all in-memory products are visible. This matches backend guidance to avoid Retail listing continuation.
+- **`productNextPageToken` present and `onLoadMore` wired:** the grid shows the full current **`products`** list for that turn and a **Load more** button sends **`productPageToken`** to the server (legacy path; server still does not call Retail for extra pages in the default setup—see [product-search-and-retail-apis.md](product-search-and-retail-apis.md)).
+
+`productPageSize` is sent on **`ChatRequest`** as both a server heuristic and the client’s slice/step size for **Show more**.
+
+## Suggested-answer chips
+
+Rendering and ingest rules (`useChat`, `MessageList`, **`suggestionVisibility.ts`**):
+
+- For **small catalogs** (known **`productTotalSize`** ≤ **`productPageSize`**), the client **omits redundant facet-style chips** when building the assistant message—**unless** the turn is clearly a follow-up: **`clarifyingQuestion`** is set, **`text`** contains **`?`**, or **`shouldHideSuggestedAnswersForMessage`** otherwise allows chips. That prevents stripping real follow-up options from **`suggestedAnswers`**.
+- With **products**, chips appear under the grid when **`clarifyingQuestion`** is set, or when **`clarifyingQuestion`** is absent but **`text`** includes **`?`** and **`suggestedAnswers`** are non-empty.
+- Without products, chips render under the main bubble as before.
+
+The UI still honors an **explicit empty** `suggestedAnswers` array from the server (no recovery from `rawResponse` for that turn).
+
+## Product detail popover
+
+**`ProductCard`**: hovering the image (or placeholder) opens a portaled detail tooltip. Horizontal position is **clamped to the viewport** (estimated width aligned with CSS `min(320px, 90vw)`); see **`productCardPopoverPlacement.ts`**.
 
 ## Voice input and voice output (Google Chrome only)
 

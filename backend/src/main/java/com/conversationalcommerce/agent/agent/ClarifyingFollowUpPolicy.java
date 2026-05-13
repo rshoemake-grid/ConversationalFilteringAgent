@@ -50,6 +50,18 @@ public final class ClarifyingFollowUpPolicy {
     }
 
     /**
+     * When the UI shows a clarifying follow-up about stock or storage, VAISR storage chips (S/R/D, etc.)
+     * are valid answers and must not be stripped just because product rows were returned.
+     */
+    public static boolean clarifyingQuestionImpliesStorageChoice(String clarifyingQuestion) {
+        if (clarifyingQuestion == null || clarifyingQuestion.isBlank()) {
+            return false;
+        }
+        String lower = clarifyingQuestion.toLowerCase(Locale.ROOT);
+        return lower.contains("stock") || lower.contains("storage");
+    }
+
+    /**
      * Drops storage/stock chips when we are not offering a clarifying follow-up (small result set).
      * Leaves non-storage suggestions (e.g. brands) untouched.
      */

@@ -402,6 +402,32 @@ describe('useChat', () => {
     expect(assistantMsg.products).toHaveLength(5)
   })
 
+  it('does not strip suggestedAnswers when clarifyingQuestion is set and catalog total fits one page', async () => {
+    vi.mocked(chatApi.sendChatMessage).mockResolvedValue({
+      text: 'I found 2 products matching your request.',
+      conversationId: 'c1',
+      refinedQuery: 'milk',
+      products: [
+        { id: 'p1', title: 'Milk A', description: '', price: '$3' },
+        { id: 'p2', title: 'Milk B', description: '', price: '$4' },
+      ],
+      productTotalSize: 2,
+      clarifyingQuestion: '2% or whole?',
+      suggestedAnswers: [
+        { displayText: '2%', value: '2%' },
+        { displayText: 'Whole', value: 'Whole' },
+      ],
+    })
+
+    const { result } = renderHook(() => useChat())
+    act(() => result.current.setInput('milk'))
+    await act(async () => result.current.handleSend())
+
+    const assistant = result.current.messages[1]
+    expect(assistant.clarifyingQuestion).toBe('2% or whole?')
+    expect(assistant.suggestedAnswers?.map((s) => s.value)).toEqual(['2%', 'Whole'])
+  })
+
   it('sends clarifyingQuestion as previousAssistantText when assistant content is count-only', async () => {
     const sendSpy = vi.mocked(chatApi.sendChatMessage)
     sendSpy

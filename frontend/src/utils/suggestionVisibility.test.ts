@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Message } from '../api/types';
-import { shouldHideSuggestedAnswersForMessage, shouldHideSuggestedAnswersForPage } from './suggestionVisibility';
+import { shouldHideSuggestedAnswersForMessage, shouldHideSuggestedAnswersForPage, shouldSuppressSuggestedAnswersWhenIngestingResponse } from './suggestionVisibility';
 
 function assistantMsg(partial: Partial<Message> & Pick<Message, 'products'>): Message {
   return {
@@ -69,6 +69,19 @@ describe('shouldHideSuggestedAnswersForMessage', () => {
     ).toBe(false);
   });
 
+  it('does not hide when assistant content asks a question', () => {
+    expect(
+      shouldHideSuggestedAnswersForMessage(
+        assistantMsg({
+          products: [{ id: 'p1', title: 'A', description: '', price: '' }],
+          productTotalSize: 3,
+          content: 'Pick a size?',
+        }),
+        20
+      )
+    ).toBe(false);
+  });
+
   it('matches shouldHideSuggestedAnswersForPage when there is no clarifying question', () => {
     const msg = assistantMsg({
       products: [{ id: 'p1', title: 'A', description: '', price: '' }],
@@ -77,5 +90,43 @@ describe('shouldHideSuggestedAnswersForMessage', () => {
     expect(shouldHideSuggestedAnswersForMessage(msg, 20)).toBe(
       shouldHideSuggestedAnswersForPage(msg, 20)
     );
+  });
+});
+
+describe('shouldSuppressSuggestedAnswersWhenIngestingResponse', () => {
+  it('does not suppress when clarifyingQuestion is present', () => {
+    expect(
+      shouldSuppressSuggestedAnswersWhenIngestingResponse(
+        [{ id: 'p1', title: 'A', description: '', price: '' }],
+        5,
+        20,
+        'What brand do you prefer?',
+        false
+      )
+    ).toBe(false);
+  });
+
+  it('does not suppress when clarifyingQuestion is omitted but text has a question', () => {
+    expect(
+      shouldSuppressSuggestedAnswersWhenIngestingResponse(
+        [{ id: 'p1', title: 'A', description: '', price: '' }],
+        5,
+        20,
+        '',
+        true
+      )
+    ).toBe(false);
+  });
+
+  it('suppresses single-page catalog echo when no follow-up question', () => {
+    expect(
+      shouldSuppressSuggestedAnswersWhenIngestingResponse(
+        [{ id: 'p1', title: 'A', description: '', price: '' }],
+        5,
+        20,
+        null,
+        false
+      )
+    ).toBe(true);
   });
 });

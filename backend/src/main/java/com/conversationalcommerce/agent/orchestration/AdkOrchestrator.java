@@ -211,11 +211,17 @@ public class AdkOrchestrator implements ChatOrchestrator {
     }
 
     /**
-     * VAISR often returns storage facet chips alongside product results; strip them whenever we have a non-empty
-     * product list so generic clarifying follow-ups do not repeat Ambient/Refrigerated/Dry storage.
+     * VAISR often returns storage facet chips alongside product results. Strip them when we have hits and the
+     * clarifying line is not explicitly about stock/storage (otherwise S/R/D chips are the user's answers).
      */
     private static boolean shouldDropEchoedStorageSuggestionsWithProducts(VaisrRetailProductResolver.Augmentation aug) {
-        return aug.products() != null && !aug.products().isEmpty();
+        if (aug.products() == null || aug.products().isEmpty()) {
+            return false;
+        }
+        if (ClarifyingFollowUpPolicy.clarifyingQuestionImpliesStorageChoice(aug.clarifyingQuestion())) {
+            return false;
+        }
+        return true;
     }
 
     static String mergeAdkTextWithSearchFailure(

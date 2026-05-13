@@ -109,6 +109,12 @@ frontend/src/
 ├── hooks/
 │   ├── useChat.ts              # Main chat state and handlers
 │   └── useVoiceOutput.ts       # speak(), stop(), isSpeaking
+├── utils/
+│   ├── suggestionVisibility.ts # Facet vs follow-up chip suppression
+│   ├── productCardPopoverPlacement.ts  # Viewport clamp for product hover tooltip
+│   ├── suggestedAnswerDisplay.ts
+│   ├── stripSuggestionEchoes.ts
+│   └── chromeVoiceSupport.ts
 ├── App.tsx
 └── main.tsx
 ```
@@ -117,11 +123,13 @@ frontend/src/
 
 | Hook/Component | Purpose |
 |----------------|---------|
-| `useChat` | State: `messages`, `mode`, `maxSuggestedAnswers`, `loading`, etc. Handlers: `handleSend`, `handleSuggestedAnswer`, `handleGetMoreSuggestions`, `handleRetry`. Manages `conversationId`, `failedSuggestedValuesRef`, sends requests to `sendChatMessage`. |
+| `useChat` | State: `messages`, `mode`, `maxSuggestedAnswers`, `productPageSize`, `loading`, etc. Handlers: `handleSend`, `handleSuggestedAnswer`, `handleLoadMore`, `handleGetMoreSuggestions`, `handleRetry`. Builds assistant messages with **`shouldSuppressSuggestedAnswersWhenIngestingResponse`** so follow-up chips are not cleared for small catalogs when `clarifyingQuestion` or `?` in text. |
 | `chatApi.sendChatMessage` | POST to `/api/chat` with `ChatRequest`. Returns `ChatResponse`. Uses `VITE_API_URL ?? '/api'`. |
-| `MessageList` | Renders messages. Slices suggested answers by `maxSuggestedAnswers`. "Get more suggestions" button on last assistant message with suggestions. |
+| `MessageList` | Renders messages, product grid with **Show more** (local slice) vs **Load more** (`productNextPageToken`). Slices suggested answers by `maxSuggestedAnswers`. Chips under the grid for `clarifyingQuestion` or `text` with `?`; uses **`shouldHideSuggestedAnswersForMessage`**. |
 | `MaxSuggestedAnswersControl` | Number input 1–50; changes apply in real time to displayed suggestions. |
-| `ProductCard` | Product display; hover shows popover with full ProductDto. |
+| `ProductCard` | Product display; hover opens a portaled detail popover clamped horizontally to the viewport. |
+| `utils/suggestionVisibility.ts` | When to hide facet chips in UI vs when to strip `suggestedAnswers` at ingest. |
+| `utils/productCardPopoverPlacement.ts` | Estimated popover width + clamp math for fixed positioning. |
 
 ---
 
@@ -217,7 +225,7 @@ Returns available Gemini models when configured. **503** with empty array if the
 | displayText | string | Shown in UI |
 | value | string | Sent to API when selected |
 
-When the agent asks a follow-up question without suggested answers (e.g. "Do you have a preference for long-grain, medium-grain, or short-grain rice?"), the app adds an "Any" option so the user can indicate no preference without typing.
+When the agent asks a follow-up question without suggested answers (e.g. assistant **`text`** includes `?` but **`suggestedAnswers`** is empty), the client adds an **Any** option so the user can indicate no preference without typing—unless that turn explicitly suppresses chips.
 
 ---
 

@@ -39,4 +39,15 @@ class ClarifyingFollowUpPolicyTest {
         var list = List.of(new ConversationalCommerceClient.SuggestedAnswer("N", "N"));
         assertThat(ClarifyingFollowUpPolicy.withoutStorageSuggestions(list)).isEmpty();
     }
+
+    @Test
+    void clarifyingQuestionImpliesStorageChoice_detectsStockAndStorageWording() {
+        assertThat(ClarifyingFollowUpPolicy.clarifyingQuestionImpliesStorageChoice("What type of stock do you prefer?"))
+                .isTrue();
+        assertThat(ClarifyingFollowUpPolicy.clarifyingQuestionImpliesStorageChoice("  Dry STORAGE preference?  "))
+                .isTrue();
+        assertThat(ClarifyingFollowUpPolicy.clarifyingQuestionImpliesStorageChoice("What style or color?")).isFalse();
+        assertThat(ClarifyingFollowUpPolicy.clarifyingQuestionImpliesStorageChoice(null)).isFalse();
+        assertThat(ClarifyingFollowUpPolicy.clarifyingQuestionImpliesStorageChoice("   ")).isFalse();
+    }
 }
