@@ -51,9 +51,17 @@ class StockTypeRetailFilterTest {
     }
 
     @Test
-    void defaultConfig_passesThroughSingleLetterStockCodes() {
-        assertThat(StockTypeRetailFilter.attributeValueForFilter("S", new ConversationalCommerceConfig())).isEqualTo("S");
-        assertThat(StockTypeRetailFilter.attributeValueForFilter("D", new ConversationalCommerceConfig())).isEqualTo("D");
+    void defaultConfig_mapsShortCodesToCatalogTokens() {
+        assertThat(StockTypeRetailFilter.attributeValueForFilter("S", new ConversationalCommerceConfig())).isEqualTo("AMBIENT");
+        assertThat(StockTypeRetailFilter.attributeValueForFilter("D", new ConversationalCommerceConfig())).isEqualTo("DRY_STORAGE");
+    }
+
+    @Test
+    void whenCanonicalDisabled_passesThroughSingleLetterStockCodes() {
+        var config = new ConversationalCommerceConfig();
+        config.setStockTypeFilterUseCanonicalValues(false);
+        assertThat(StockTypeRetailFilter.attributeValueForFilter("S", config)).isEqualTo("S");
+        assertThat(StockTypeRetailFilter.attributeValueForFilter("D", config)).isEqualTo("D");
     }
 
     @Test

@@ -7,8 +7,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ConversationalCommerceConfigTest {
 
     @Test
-    void stockTypeFilterUseCanonicalValues_defaultsToFalse() {
-        assertThat(new ConversationalCommerceConfig().stockTypeFilterUseCanonicalValues()).isFalse();
+    void stockTypeFilterUseCanonicalValues_defaultsToTrue() {
+        assertThat(new ConversationalCommerceConfig().stockTypeFilterUseCanonicalValues()).isTrue();
     }
 
     @Test

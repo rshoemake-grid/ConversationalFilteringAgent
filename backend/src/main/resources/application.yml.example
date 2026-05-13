@@ -59,8 +59,8 @@ conversational-commerce:
   conversational-filtering-mode: ${CONVERSATIONAL_FILTERING_MODE:DISABLED}
   # GCP returns attributes.stockType; use "stockType" for product filters.
   # Retail ANY("…") uses S/R/D/N as in the catalog by default (display mapping is UI-only).
-  # Set true if attributes.stockType stores AMBIENT / REFRIGERATED / DRY_STORAGE instead of letters.
-  stock-type-filter-use-canonical-values: ${STOCK_TYPE_FILTER_USE_CANONICAL_VALUES:false}
+  # Default true (maps S/R/D to AMBIENT / REFRIGERATED / DRY_STORAGE). Set false if the catalog indexes single letters only.
+  stock-type-filter-use-canonical-values: ${STOCK_TYPE_FILTER_USE_CANONICAL_VALUES:true}
   stock-type-filter-attribute: ${STOCK_TYPE_FILTER_ATTRIBUTE:stockType}
   # Hint for UI heuristics (approx totals, chip suppression). Does not cap initial catalog merge; Retail listing has no load-more.
   product-search-page-size: ${PRODUCT_SEARCH_PAGE_SIZE:20}

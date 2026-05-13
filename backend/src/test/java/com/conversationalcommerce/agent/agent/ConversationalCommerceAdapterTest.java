@@ -2,6 +2,7 @@ package com.conversationalcommerce.agent.agent;
 
 import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
 import com.conversationalcommerce.agent.orchestration.RetailProductApiGate;
+import com.conversationalcommerce.agent.web.ChatRequest;
 import com.conversationalcommerce.agent.gemini.ClarifyingQuestionGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -637,7 +638,26 @@ class ConversationalCommerceAdapterTest {
         assertThat(response.products().get(0).title()).isEqualTo("Long Grain Rice");
         assertThat(response.suggestedAnswers()).isEmpty();
         assertThat(stubSearchClient.lastQuery).isEqualTo("rice");
-        assertThat(stubSearchClient.lastFilter).contains("attributes.").contains("\"D\"");
+        assertThat(stubSearchClient.lastFilter).contains("attributes.").contains("DRY_STORAGE");
+    }
+
+    @Test
+    void sendMessage_storageTypeSelectionWithProductPool_skipsPoolAndRunsFullCatalogSearch() {
+        stubClient.setNextResult(new ConversationalCommerceClient.ConversationalCommerceResult(
+                "ok", "conv-1", "rice", "SIMPLE_PRODUCT_SEARCH", "agent", null, List.of()));
+        stubSearchClient.setProducts(List.of(AgentResponse.ProductResult.of("p-catalog", "Long Grain", "Dry", "$2", null)));
+        var pool = List.of(new ChatRequest.ProductPoolInput(
+                "pool-1", "Only in visible pool", "desc", "$1", null, null, null, null, null, null, null, null, null, null, null));
+        var ctx = new java.util.HashMap<String, Object>();
+        ctx.put("productPool", pool);
+        ctx.put("previousRefinedQuery", "rice");
+
+        AgentResponse response = adapter.sendMessage("", "D", ctx);
+
+        assertThat(response.products()).hasSize(1);
+        assertThat(response.products().get(0).id()).isEqualTo("p-catalog");
+        assertThat(stubSearchClient.lastQuery).isEqualTo("rice");
+        assertThat(stubSearchClient.lastFilter).contains("DRY_STORAGE");
     }
 
     @Test
@@ -715,7 +735,7 @@ class ConversationalCommerceAdapterTest {
                 "Options", "conv-1", "REFRIGERATED", "SIMPLE_PRODUCT_SEARCH", "agent", null, List.of()
         ));
         stubSearchClient.setProducts(List.of(AgentResponse.ProductResult.of("p1", "Long Grain Rice", "Shelf", "$5", null)));
-        stubSearchClient.setReturnEmptyWhenFilterContains("R");  // R search fails, auto-run S succeeds
+        stubSearchClient.setReturnEmptyWhenFilterContains("REFRIGERATED");  // R search fails, auto-run S succeeds
 
         // After D failed, we showed S and R. User clicks R, it fails; remaining = [S]. We auto-run S.
         var context = Map.<String, Object>of(
@@ -734,7 +754,7 @@ class ConversationalCommerceAdapterTest {
         assertThat(response.text()).contains("Showing 1 of");
         assertThat(response.suggestedAnswers()).isEmpty();
         assertThat(stubSearchClient.lastQuery).isEqualTo("rice");
-        assertThat(stubSearchClient.lastFilter).contains("stockType").contains("\"S\"");
+        assertThat(stubSearchClient.lastFilter).contains("stockType").contains("AMBIENT");
     }
 
     @Test

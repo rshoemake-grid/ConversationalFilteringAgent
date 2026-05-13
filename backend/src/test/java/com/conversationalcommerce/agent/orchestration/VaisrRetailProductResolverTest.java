@@ -53,7 +53,7 @@ class VaisrRetailProductResolverTest {
     void resolvesAmbientSelectionUsingPreviousRefinedQueryAndRunsRetailSearch() {
         var pr = AgentResponse.ProductResult.of("id1", "Rice A", "d", "$1", "");
         when(searchClient.searchWithPagination(
-                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"S\")"), eq(null), any(), eq(null)))
+                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"AMBIENT\")"), eq(null), any(), eq(null)))
                 .thenReturn(SearchResult.of(List.of(pr), null, 3));
 
         var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(
@@ -75,7 +75,7 @@ class VaisrRetailProductResolverTest {
     void storageRecoveryRunsWithOnlyPreviousRefinedQueryAndNoSuggestedAnswersList() {
         var pr = AgentResponse.ProductResult.of("id1", "Rice A", "d", "$1", "");
         when(searchClient.searchWithPagination(
-                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"D\")"), eq(null), any(), eq(null)))
+                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"DRY_STORAGE\")"), eq(null), any(), eq(null)))
                 .thenReturn(SearchResult.of(List.of(pr), null, 3));
 
         var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(
@@ -94,7 +94,7 @@ class VaisrRetailProductResolverTest {
     @Test
     void storageRecoveryWithNoProducts_reasksWithRemainingSuggestedAnswers() {
         when(searchClient.searchWithPagination(
-                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"D\")"), eq(null), any(), eq(null)))
+                eq("p"), eq("b"), eq("rice"), any(), eq("attributes.stockType: ANY(\"DRY_STORAGE\")"), eq(null), any(), eq(null)))
                 .thenReturn(SearchResult.of(List.of(), null, 0));
 
         var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(

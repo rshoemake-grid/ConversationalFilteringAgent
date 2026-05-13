@@ -78,7 +78,10 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
         List<ChatRequest.ProductPoolInput> poolInputs =
                 (List<ChatRequest.ProductPoolInput>) context.get("productPool");
         if (poolInputs != null && !poolInputs.isEmpty()) {
-            return refineInMemoryProductPool(conversationId, message, context, visitorId, poolInputs);
+            if (!shouldSkipProductPoolForStorageSelection(message, context)) {
+                return refineInMemoryProductPool(conversationId, message, context, visitorId, poolInputs);
+            }
+            log.debug("Storage-type chip with product pool: using full catalog search + stock filter instead of pool-only refine.");
         }
 
         String imageBase64 = (String) context.get("imageBase64");
@@ -591,12 +594,22 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
         return n.equals("NO PREFERENCE") || n.startsWith("NO PREFERENCE");
     }
 
-    /** True when user selected a storage-type suggested answer (S, R, D) that expanded to a canonical storage value. */
+    /**
+     * True when the turn is a storage/stock chip or equivalent (S, R, D, …), aligned with
+     * {@link com.conversationalcommerce.agent.orchestration.VaisrRetailProductResolver}: if
+     * {@code previousRefinedQuery} is set, we do not require {@code previousSuggestedAnswers}.
+     */
     private static boolean isStorageTypeSelection(String expandedQuery, String originalUserInput, Map<String, Object> context) {
-        if (expandedQuery == null || expandedQuery.isBlank() || !STORAGE_TYPE_VALUES.contains(expandedQuery.trim().toUpperCase()))
+        if (expandedQuery == null || expandedQuery.isBlank() || !STORAGE_TYPE_VALUES.contains(expandedQuery.trim().toUpperCase())) {
             return false;
+        }
+        Object pr = context != null ? context.get("previousRefinedQuery") : null;
+        String prevRefined = pr != null ? pr.toString().trim() : "";
+        if (!prevRefined.isEmpty()) {
+            return true;
+        }
         @SuppressWarnings("unchecked")
-        var prevList = (List<Map<String, String>>) context.get("previousSuggestedAnswers");
+        var prevList = context != null ? (List<Map<String, String>>) context.get("previousSuggestedAnswers") : null;
         if (prevList == null) return false;
         String trimmed = originalUserInput != null ? originalUserInput.trim() : "";
         for (var m : prevList) {
@@ -605,6 +618,19 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             if (trimmed.equalsIgnoreCase(displayText) || trimmed.equals(value)) return true;
         }
         return false;
+    }
+
+    /**
+     * In-memory pool refine is the wrong tool for storage chips: the pool is only the current page/slice,
+     * and {@link ProductPoolNarrower} does not apply {@code attributes.stockType} filters.
+     */
+    private boolean shouldSkipProductPoolForStorageSelection(String message, Map<String, Object> context) {
+        if (message == null || message.isBlank() || context == null) {
+            return false;
+        }
+        String userInput = message.trim();
+        String query = expandShortAttributeValue(userInput, context);
+        return isStorageTypeSelection(query, userInput, context);
     }
 
     /** Build filter for stock/storage type. Uses config attribute (stockType default); value is S/R/D for stockType catalogs. */

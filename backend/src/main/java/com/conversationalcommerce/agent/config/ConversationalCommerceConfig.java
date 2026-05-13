@@ -18,10 +18,10 @@ public class ConversationalCommerceConfig {
     /** Filter attribute for stock/storage type (GCP often returns attributes.stockType). Use "stockType" or "storageType". */
     private String stockTypeFilterAttribute = "stockType";
     /**
-     * When true, Retail {@code ANY("…")} uses AMBIENT / REFRIGERATED / DRY_STORAGE for S/R/D.
-     * Default false: catalogs often index single-letter stock codes; UI mapping is display-only.
+     * When true, Retail {@code ANY("…")} uses AMBIENT / REFRIGERATED / DRY_STORAGE for S/R/D (typical GCP enum values).
+     * Default true; set false if {@code attributes.stockType} is indexed as single letters only.
      */
-    private boolean stockTypeFilterUseCanonicalValues = false;
+    private boolean stockTypeFilterUseCanonicalValues = true;
     /** Used for UI heuristics (approximate totals, chip suppression). Not used for Retail listing continuation. */
     private int productSearchPageSize = 20;
     /**
