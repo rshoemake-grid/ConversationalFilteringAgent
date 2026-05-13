@@ -5,6 +5,7 @@ import com.conversationalcommerce.agent.agent.ClarifyingFollowUpPolicy;
 import com.conversationalcommerce.agent.agent.ConversationalCommerceClient;
 import com.conversationalcommerce.agent.agent.StockTypeRetailFilter;
 import com.conversationalcommerce.agent.agent.ProductEnrichmentService;
+import com.conversationalcommerce.agent.agent.RetailSessionFilterUtils;
 import com.conversationalcommerce.agent.agent.InitialCatalogAggregator;
 import com.conversationalcommerce.agent.agent.SearchResult;
 import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
@@ -129,7 +130,11 @@ public class VaisrRetailProductResolver {
                             ? filter + " AND " + storageTypeFilter
                             : storageTypeFilter;
                 }
-                filter = combineRetailFilters(sanitizeSessionProductFilter((String) context.get("previousProductFilter")), filter);
+                String session = sanitizeSessionProductFilter((String) context.get("previousProductFilter"));
+                if (storageTypeFilter != null) {
+                    session = RetailSessionFilterUtils.stripStorageAttributeAnyFilters(session);
+                }
+                filter = combineRetailFilters(session, filter);
                 productFilterUsed = filter;
                 searchResult = initialCatalogAggregator.searchCatalog(
                         config.placement(),
@@ -194,7 +199,8 @@ public class VaisrRetailProductResolver {
                     if (filterValue != null) {
                         try {
                             String stFilter = combineRetailFilters(
-                                    sanitizeSessionProductFilter((String) context.get("previousProductFilter")),
+                                    RetailSessionFilterUtils.stripStorageAttributeAnyFilters(
+                                            sanitizeSessionProductFilter((String) context.get("previousProductFilter"))),
                                     buildStorageTypeFilter(filterValue));
                             List<AgentResponse.ProductResult> autoProducts =
                                     enrichmentService.enrich(initialCatalogAggregator.searchCatalog(
@@ -471,13 +477,12 @@ public class VaisrRetailProductResolver {
                 || STORAGE_TYPE_VALUES.contains(u);
     }
 
-    private String buildStorageTypeFilter(String value) {
-        if (value == null || value.isBlank()) {
+    private String buildStorageTypeFilter(String expandedValue) {
+        if (expandedValue == null || expandedValue.isBlank()) {
             return null;
         }
-        String attr = config.stockTypeFilterAttribute();
-        String escaped = value.trim().replace("\\", "\\\\").replace("\"", "\\\"");
-        return "attributes." + attr + ": ANY(\"" + escaped + "\")";
+        return StockTypeRetailFilter.buildStorageAttributeAnyClause(
+                expandedValue.trim(), config.stockTypeFilterAttribute(), config);
     }
 
     private static final Map<String, String> STORAGE_DISPLAY_DEFAULTS = Map.of(

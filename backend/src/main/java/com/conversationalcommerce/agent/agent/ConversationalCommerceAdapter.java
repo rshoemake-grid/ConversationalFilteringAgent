@@ -143,7 +143,11 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                             ? filter + " AND " + storageTypeFilter
                             : storageTypeFilter;
                 }
-                filter = combineRetailFilters(sanitizeSessionProductFilter((String) context.get("previousProductFilter")), filter);
+                String session = sanitizeSessionProductFilter((String) context.get("previousProductFilter"));
+                if (storageTypeFilter != null) {
+                    session = RetailSessionFilterUtils.stripStorageAttributeAnyFilters(session);
+                }
+                filter = combineRetailFilters(session, filter);
                 productFilterUsed = filter;
                 searchResult = initialCatalogAggregator.searchCatalog(
                         config.placement(),
@@ -247,7 +251,8 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                     if (filterValue != null) {
                         try {
                             String stFilter = combineRetailFilters(
-                                    sanitizeSessionProductFilter((String) context.get("previousProductFilter")),
+                                    RetailSessionFilterUtils.stripStorageAttributeAnyFilters(
+                                            sanitizeSessionProductFilter((String) context.get("previousProductFilter"))),
                                     buildStorageTypeFilter(filterValue));
                             SearchResult autoSr = initialCatalogAggregator.searchCatalog(
                                     config.placement(), config.branch(), prevRefined.trim(), visitorId, stFilter, null, null);
@@ -666,12 +671,13 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
         return isStorageTypeSelection(query, userInput, context);
     }
 
-    /** Build filter for stock/storage type. Uses config attribute (stockType default); value is S/R/D for stockType catalogs. */
-    private String buildStorageTypeFilter(String value) {
-        if (value == null || value.isBlank()) return null;
-        String attr = config.stockTypeFilterAttribute();
-        String escaped = value.trim().replace("\\", "\\\\").replace("\"", "\\\"");
-        return "attributes." + attr + ": ANY(\"" + escaped + "\")";
+    /** Build filter for stock/storage type. Uses config attribute (stockType default); canonical mode emits letter + long-form ANY(). */
+    private String buildStorageTypeFilter(String expandedStorageValue) {
+        if (expandedStorageValue == null || expandedStorageValue.isBlank()) {
+            return null;
+        }
+        return StockTypeRetailFilter.buildStorageAttributeAnyClause(
+                expandedStorageValue.trim(), config.stockTypeFilterAttribute(), config);
     }
 
     private static final java.util.Map<String, String> STORAGE_DISPLAY_DEFAULTS = java.util.Map.of(
@@ -707,6 +713,7 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                     filterValue = value != null ? value.trim() : null;
                 }
                 String newFilter = buildStorageTypeFilter(filterValue);
+                session = RetailSessionFilterUtils.stripStorageAttributeAnyFilters(session);
                 String merged = combineRetailFilters(session, newFilter);
                 SearchResult sr = initialCatalogAggregator.searchCatalog(
                         config.placement(), config.branch(), baseQuery, visitorId, merged, null, null);

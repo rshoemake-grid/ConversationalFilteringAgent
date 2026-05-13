@@ -69,4 +69,22 @@ class StockTypeRetailFilterTest {
         assertThat(StockTypeRetailFilter.attributeValueForFilter(null, null)).isNull();
         assertThat(StockTypeRetailFilter.attributeValueForFilter("  ", null)).isNull();
     }
+
+    @Test
+    void buildStorageAttributeAnyClause_includesLetters_whenCanonicalEnabled() {
+        var config = new ConversationalCommerceConfig();
+        config.setStockTypeFilterUseCanonicalValues(true);
+        assertThat(StockTypeRetailFilter.buildStorageAttributeAnyClause("AMBIENT", "stockType", config))
+                .isEqualTo("attributes.stockType: ANY(\"AMBIENT\", \"S\")");
+        assertThat(StockTypeRetailFilter.buildStorageAttributeAnyClause("DRY_STORAGE", "stockType", config))
+                .isEqualTo("attributes.stockType: ANY(\"DRY_STORAGE\", \"D\")");
+    }
+
+    @Test
+    void buildStorageAttributeAnyClause_singleValue_whenCanonicalDisabled() {
+        var config = new ConversationalCommerceConfig();
+        config.setStockTypeFilterUseCanonicalValues(false);
+        assertThat(StockTypeRetailFilter.buildStorageAttributeAnyClause("S", "stockType", config))
+                .isEqualTo("attributes.stockType: ANY(\"S\")");
+    }
 }
