@@ -120,7 +120,7 @@ class ConversationalCommerceAdapterTest {
 
         assertThat(response.text()).isEqualTo("Here are some options");
         assertThat(response.conversationId()).isEqualTo("conv-123");
-        assertThat(response.refinedQuery()).isEqualTo("refined query");
+        assertThat(response.refinedQuery()).isEqualTo("show me shoes");
         assertThat(response.queryType()).isEqualTo("SIMPLE_PRODUCT_SEARCH");
     }
 

@@ -79,7 +79,7 @@ public class InitialCatalogAggregator {
             String filter,
             String pageToken,
             Integer requestPageSizeOverride) {
-        if (!retailProductApiGate.mayQueryRetailSearchApis()) {
+        if (!retailProductApiGate.mayQueryRetailCatalogSearch(query, filter)) {
             return SearchResult.of(List.of());
         }
         if (pageToken != null && !pageToken.isBlank()) {
@@ -88,7 +88,7 @@ public class InitialCatalogAggregator {
 
         int initialPs = clampPageSize(config.initialCatalogPageSize());
         if (!config.initialCatalogFetchAllPages()) {
-            retailProductApiGate.noteRetailProductListingCommitted();
+            retailProductApiGate.noteRetailProductListingCommitted(query, filter);
             SearchResult sr = searchClient.searchWithPagination(
                     placement, branch, query, visitorId, filter, null, initialPs, null);
             return applyInitialSuppress(sr);
@@ -111,7 +111,7 @@ public class InitialCatalogAggregator {
         int pagesNeeded = (maxProducts + pageSize - 1) / pageSize;
         int nPages = Math.min(maxPagesAllowed, Math.max(1, pagesNeeded));
 
-        retailProductApiGate.noteRetailProductListingCommitted();
+        retailProductApiGate.noteRetailProductListingCommitted(query, filter);
         List<Future<OffsetPageResult>> futures = new ArrayList<>(nPages);
         for (int i = 0; i < nPages; i++) {
             final int pageIndex = i;
@@ -185,7 +185,7 @@ public class InitialCatalogAggregator {
         int maxPages = Math.max(1, config.initialCatalogMaxPageRequests());
         String nextContinuation = null;
 
-        retailProductApiGate.noteRetailProductListingCommitted();
+        retailProductApiGate.noteRetailProductListingCommitted(query, filter);
         for (int page = 0; page < maxPages; page++) {
             SearchResult sr = searchClient.searchWithPagination(
                     placement, branch, query, visitorId, filter, fetchToken, pageSize, null);

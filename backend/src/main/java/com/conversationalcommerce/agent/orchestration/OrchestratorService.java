@@ -30,6 +30,7 @@ public class OrchestratorService {
                                  String imageBase64, Integer maxSuggestedAnswers, String previousAssistantText,
                                  java.util.List<ChatRequest.SuggestedAnswerInput> previousSuggestedAnswers,
                                  String previousRefinedQuery, String productPageToken, String previousProductFilter,
+                                 Long previousProductTotalSize, Boolean previousProductTotalSizeIsApproximate,
                                  Integer productPageSize,
                                  java.util.List<ChatRequest.ProductPoolInput> productPool, Boolean useSemanticReranking) {
         var context = new java.util.HashMap<String, Object>(Map.of("visitorId", sessionId, "sessionId", sessionId));
@@ -56,6 +57,10 @@ public class OrchestratorService {
         }
         if (previousProductFilter != null && !previousProductFilter.isBlank()) {
             context.put("previousProductFilter", previousProductFilter.trim());
+        }
+        if (previousProductTotalSize != null && previousProductTotalSize >= 0) {
+            context.put("previousProductTotalSize", previousProductTotalSize);
+            context.put("previousProductTotalSizeIsApproximate", Boolean.TRUE.equals(previousProductTotalSizeIsApproximate));
         }
         if (productPageSize != null && productPageSize > 0) {
             context.put("productPageSize", productPageSize);

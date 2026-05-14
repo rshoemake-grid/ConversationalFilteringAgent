@@ -51,6 +51,8 @@ class OrchestratorServiceTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 null
         );
 
@@ -72,6 +74,8 @@ class OrchestratorServiceTest {
                 "search shoes",
                 "conv-1",
                 "visitor-456",
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -108,6 +112,8 @@ class OrchestratorServiceTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 null
         );
 
@@ -124,6 +130,8 @@ class OrchestratorServiceTest {
                 "hi",
                 null,
                 "session-1",
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -157,10 +165,38 @@ class OrchestratorServiceTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 null
         );
 
         assertThat(convoOrchestrator.lastContext.get("maxSuggestedAnswers")).isEqualTo(5);
+    }
+
+    @Test
+    void process_putsPreviousProductTotalSizeInContextWhenProvided() {
+        convoOrchestrator.setNextResponse(AgentResponse.builder().text("ok").conversationId("x").build());
+
+        orchestratorService.process(
+                ChatRequest.OrchestrationMode.convo_commerce,
+                "hi",
+                null,
+                "session-1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "filter: x",
+                5608L,
+                true,
+                null,
+                null,
+                null);
+
+        assertThat(convoOrchestrator.lastContext.get("previousProductTotalSize")).isEqualTo(5608L);
+        assertThat(convoOrchestrator.lastContext.get("previousProductTotalSizeIsApproximate")).isEqualTo(true);
     }
 
     private static class StubChatOrchestrator implements ChatOrchestrator {

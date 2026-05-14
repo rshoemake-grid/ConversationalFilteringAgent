@@ -35,6 +35,8 @@ public class ChatController {
                 request.previousRefinedQuery(),
                 request.productPageToken(),
                 request.previousProductFilter(),
+                request.previousProductTotalSize(),
+                request.previousProductTotalSizeIsApproximate(),
                 request.productPageSize(),
                 request.productPool(),
                 request.useSemanticReranking()

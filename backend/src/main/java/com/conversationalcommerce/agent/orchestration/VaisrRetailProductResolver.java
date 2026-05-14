@@ -3,11 +3,13 @@ package com.conversationalcommerce.agent.orchestration;
 import com.conversationalcommerce.agent.agent.AgentResponse;
 import com.conversationalcommerce.agent.agent.ClarifyingFollowUpPolicy;
 import com.conversationalcommerce.agent.agent.ConversationalCommerceClient;
-import com.conversationalcommerce.agent.agent.StockTypeRetailFilter;
-import com.conversationalcommerce.agent.agent.ProductEnrichmentService;
-import com.conversationalcommerce.agent.agent.RetailSessionFilterUtils;
 import com.conversationalcommerce.agent.agent.InitialCatalogAggregator;
+import com.conversationalcommerce.agent.agent.ProductEnrichmentService;
+import com.conversationalcommerce.agent.agent.ProductTotalSizeBaseline;
+import com.conversationalcommerce.agent.agent.RetailListingQueryResolver;
+import com.conversationalcommerce.agent.agent.RetailSessionFilterUtils;
 import com.conversationalcommerce.agent.agent.SearchResult;
+import com.conversationalcommerce.agent.agent.StockTypeRetailFilter;
 import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
 import com.conversationalcommerce.agent.gemini.ClarifyingQuestionGenerator;
 import org.slf4j.Logger;
@@ -118,6 +120,16 @@ public class VaisrRetailProductResolver {
             }
         }
 
+        String sessionFilterForMerge = sanitizeSessionProductFilter((String) context.get("previousProductFilter"));
+        searchQuery = RetailListingQueryResolver.chooseSearchQuery(
+                query,
+                searchQuery,
+                usedStorageTypeRecovery,
+                usedNoPreferenceRecovery,
+                result.queryType(),
+                (String) context.get("previousRefinedQuery"),
+                sessionFilterForMerge);
+
         List<AgentResponse.ProductResult> products = List.of();
         SearchResult searchResult = null;
         String productFilterUsed = null;
@@ -130,7 +142,7 @@ public class VaisrRetailProductResolver {
                             ? filter + " AND " + storageTypeFilter
                             : storageTypeFilter;
                 }
-                String session = sanitizeSessionProductFilter((String) context.get("previousProductFilter"));
+                String session = sessionFilterForMerge;
                 if (storageTypeFilter != null) {
                     session = RetailSessionFilterUtils.stripStorageAttributeAnyFilters(session);
                 }
@@ -244,8 +256,8 @@ public class VaisrRetailProductResolver {
         }
 
         List<AgentResponse.ProductResult> productsToReturn = products;
-        String refinedQuery = ((usedNoPreferenceRecovery || usedStorageTypeRecovery) && searchQuery != null)
-                ? searchQuery
+        String refinedQuery = (searchQuery != null && !searchQuery.isBlank())
+                ? searchQuery.trim()
                 : result.refinedQuery();
 
         boolean isSearchingFallback = text.startsWith("Searching for:");
@@ -299,7 +311,9 @@ public class VaisrRetailProductResolver {
         } else if (products.isEmpty() && hasRefinedQuery && !usedNoPreferenceRecovery && !usedStorageTypeRecovery) {
             // Recovery paths above already set "No products found." when the retail search is empty; do not append again.
             boolean hasMeaningfulAgentText = text != null && !text.isEmpty() && !text.startsWith("Searching for:");
-            if (isNoProductsOnlyAgentText(text)) {
+            if (ClarifyingFollowUpPolicy.agentTextConflictsWithEmptyProductSearch(result.queryType())) {
+                text = "No products found.";
+            } else if (isNoProductsOnlyAgentText(text)) {
                 text = "No products found.";
             } else {
                 text = (hasMeaningfulAgentText ? text + "\n\n" : "") + "No products found.";
@@ -316,6 +330,10 @@ public class VaisrRetailProductResolver {
             totalSize = Math.max(productsToReturn.size(), (long) pagesEstimate * pageSize);
             totalSizeIsApproximate = true;
         }
+        var narrowedDisplayTotal = ProductTotalSizeBaseline.adjustNarrowingDisplayTotal(
+                totalSize, totalSizeIsApproximate, context);
+        totalSize = narrowedDisplayTotal.totalSize();
+        totalSizeIsApproximate = narrowedDisplayTotal.totalSizeIsApproximate();
         if (totalSize >= 0 && productsToReturn != null && !productsToReturn.isEmpty()
                 && text != null && text.matches("I found \\d+ product(s)? matching your request\\.")) {
             String prefix = totalSizeIsApproximate ? "at least " : "";

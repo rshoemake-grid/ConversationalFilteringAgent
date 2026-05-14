@@ -5,6 +5,7 @@ const STORAGE_LABELS: Record<string, string> = {
   S: 'Ambient',
   R: 'Refrigerated',
   D: 'Dry storage',
+  N: 'Non-refrigerated',
   F: 'Frozen',
   C: 'Refrigerated',
 };

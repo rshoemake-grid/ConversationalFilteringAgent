@@ -193,9 +193,96 @@ class VaisrRetailProductResolverTest {
                 "No products found.", "c-gcp", "rice", "PRODUCT_DETAILS", "agent", "{}", List.of());
         var ctx = Map.<String, Object>of("visitorId", "v1");
 
-        VaisrRetailProductResolver.Augmentation aug = resolver.resolve(vaisr, "detail", ctx);
+        VaisrRetailProductResolver.Augmentation aug = resolver.resolve(vaisr, "rice", ctx);
 
         assertThat(aug.products()).isEmpty();
         assertThat(aug.text()).isEqualTo("No products found.");
+    }
+
+    @Test
+    void productDetailsNarrativeWithEmptyRetail_doesNotAppendContradictoryNoProductsSuffix() {
+        when(searchClient.searchWithPagination(
+                eq("p"), eq("b"), eq("uncle bens"), any(), eq(null), eq(null), any(), eq(null)))
+                .thenReturn(SearchResult.of(List.of(), null, 0));
+
+        var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(
+                "We have BEN'S ORIGINAL Converted Rice, 10 kilograms, and more.",
+                "c-gcp",
+                "uncle bens",
+                "PRODUCT_DETAILS",
+                "agent",
+                "{}",
+                List.of());
+        var ctx = Map.<String, Object>of("visitorId", "v1");
+
+        VaisrRetailProductResolver.Augmentation aug = resolver.resolve(vaisr, "uncle bens", ctx);
+
+        assertThat(aug.products()).isEmpty();
+        assertThat(aug.text()).isEqualTo("No products found.");
+    }
+
+    @Test
+    void mergedRefinement_keepsPriorCatalogTotalWhenRetailReturnsSmallerTotal() {
+        var pr = AgentResponse.ProductResult.of("id1", "Rice A", "d", "$1", "");
+        String stockFilter = "attributes.stockType: ANY(\"DRY_STORAGE\", \"D\")";
+        when(searchClient.searchWithPagination(
+                eq("p"), eq("b"), eq("rice Asian"), any(), eq(stockFilter), eq(null), any(), eq(null)))
+                .thenReturn(SearchResult.of(List.of(pr), null, 508));
+
+        var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(
+                "What type of stock do you prefer?",
+                "c-gcp",
+                "rice",
+                "SIMPLE_PRODUCT_SEARCH",
+                "agent",
+                "{}",
+                List.of(
+                        new ConversationalCommerceClient.SuggestedAnswer("Ambient", "S"),
+                        new ConversationalCommerceClient.SuggestedAnswer("Refrigerated", "R"),
+                        new ConversationalCommerceClient.SuggestedAnswer("Non-refrigerated", "N")));
+
+        var ctx = new java.util.HashMap<String, Object>();
+        ctx.put("visitorId", "v1");
+        ctx.put("previousRefinedQuery", "rice");
+        ctx.put("previousProductFilter", stockFilter);
+        ctx.put("previousProductTotalSize", 5608L);
+
+        VaisrRetailProductResolver.Augmentation aug = resolver.resolve(vaisr, "Asian", ctx);
+
+        assertThat(aug.products()).hasSize(1);
+        assertThat(aug.refinedQuery()).isEqualTo("rice Asian");
+        assertThat(aug.productTotalSize()).isEqualTo(5608L);
+        assertThat(aug.text()).contains("5608");
+    }
+
+    @Test
+    void mergesSingleTokenKeywordWithPreviousCategoryWhenRetailFilterActive() {
+        var pr = AgentResponse.ProductResult.of("id1", "Rice A", "d", "$1", "");
+        String stockFilter = "attributes.stockType: ANY(\"DRY_STORAGE\", \"D\")";
+        when(searchClient.searchWithPagination(
+                eq("p"), eq("b"), eq("rice Asian"), any(), eq(stockFilter), eq(null), any(), eq(null)))
+                .thenReturn(SearchResult.of(List.of(pr), null, 3));
+
+        var vaisr = new ConversationalCommerceClient.ConversationalCommerceResult(
+                "What type of stock do you prefer?",
+                "c-gcp",
+                "rice",
+                "SIMPLE_PRODUCT_SEARCH",
+                "agent",
+                "{}",
+                List.of(
+                        new ConversationalCommerceClient.SuggestedAnswer("Ambient", "S"),
+                        new ConversationalCommerceClient.SuggestedAnswer("Refrigerated", "R"),
+                        new ConversationalCommerceClient.SuggestedAnswer("Non-refrigerated", "N")));
+
+        var ctx = Map.<String, Object>of(
+                "visitorId", "v1",
+                "previousRefinedQuery", "rice",
+                "previousProductFilter", stockFilter);
+
+        VaisrRetailProductResolver.Augmentation aug = resolver.resolve(vaisr, "Asian", ctx);
+
+        assertThat(aug.products()).hasSize(1);
+        assertThat(aug.refinedQuery()).isEqualTo("rice Asian");
     }
 }

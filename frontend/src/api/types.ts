@@ -71,6 +71,10 @@ export interface ChatRequest {
   productPageToken?: string;
   /** Filter from previous response (context only) */
   previousProductFilter?: string;
+  /** Prior assistant productTotalSize; backend may keep broader catalog count when narrowing */
+  previousProductTotalSize?: number;
+  /** Echo prior assistant productTotalSizeIsApproximate with previousProductTotalSize */
+  previousProductTotalSizeIsApproximate?: boolean;
   /** Hint for UI/heuristics only; does not cap initial catalog or trigger Retail paging */
   productPageSize?: number;
   /**

@@ -183,6 +183,7 @@ class ChatControllerTest {
                                      String imageBase64, Integer maxSuggestedAnswers, String previousAssistantText,
                                      List<ChatRequest.SuggestedAnswerInput> previousSuggestedAnswers,
                                      String previousRefinedQuery, String productPageToken, String previousProductFilter,
+                                     Long previousProductTotalSize, Boolean previousProductTotalSizeIsApproximate,
                                      Integer productPageSize,
                                      List<ChatRequest.ProductPoolInput> productPool, Boolean useSemanticReranking) {
             if (throwOnNext) {

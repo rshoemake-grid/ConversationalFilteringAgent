@@ -93,7 +93,7 @@ class BrandDisplayResolverTest {
         config.setRetailSingleShotPerConversation(true);
         var gate = new RetailProductApiGate(config);
         gate.beginChatTurn("cb", "sb");
-        gate.noteRetailProductListingCommitted();
+        gate.noteRetailProductListingCommitted("rice", null);
         gate.endChatTurn();
         gate.beginChatTurn("cb", "sb");
         resolver = new BrandDisplayResolver(config, client, gate);

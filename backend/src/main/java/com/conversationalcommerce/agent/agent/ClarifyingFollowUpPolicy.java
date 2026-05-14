@@ -43,6 +43,18 @@ public final class ClarifyingFollowUpPolicy {
         return effectiveProductCount > productCountThreshold;
     }
 
+    /**
+     * Conversational query types where the model may list or describe products from general knowledge while
+     * Retail has zero hits. Combining that prose with {@code No products found.} reads as contradictory.
+     */
+    public static boolean agentTextConflictsWithEmptyProductSearch(String queryType) {
+        if (queryType == null || queryType.isBlank()) {
+            return false;
+        }
+        String u = queryType.trim().toUpperCase(Locale.ROOT);
+        return "PRODUCT_DETAILS".equals(u) || "PRODUCT_COMPARISON".equals(u);
+    }
+
     public static boolean isStorageSuggestionValue(String value) {
         if (value == null || value.isBlank()) {
             return false;

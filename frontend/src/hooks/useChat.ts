@@ -352,6 +352,14 @@ export function useChat() {
   /** Accumulated Retail filter from successful turns; sent as previousProductFilter */
   const sessionProductFilterRef = useRef<string | undefined>(undefined);
   const sessionFilterSnapshotRef = useRef<string | undefined>(undefined);
+  /**
+   * Typed messages must not send productPool: convo_commerce would only refine the prior grid and miss full Retail
+   * catalog + filters (e.g. "I'd like to buy some rice" after another listing). Chips still send the pool.
+   * After Clear Retail filters, skip productPool for one request so the next turn is never pool-bound.
+   */
+  const skipProductPoolNextRequestRef = useRef(false);
+  /** Mirror of ref for UI (reset control) without widening sendMessage deps */
+  const [activeRetailSessionFilter, setActiveRetailSessionFilter] = useState<string | undefined>(undefined);
 
   const inputRef = useRef(input);
   const conversationIdRef = useRef<string | undefined>(undefined);
@@ -396,14 +404,31 @@ export function useChat() {
       const previousProductFilterForRequest =
         options?.previousProductFilter ?? (options?.productPageToken ? undefined : sessionProductFilterRef.current);
 
+      const lastAssistantBeforeSend = [...messages].reverse().find((m) => m.role === 'assistant' && !m.isError);
+      const previousProductTotalSizeForRequest =
+        previousProductFilterForRequest != null &&
+        lastAssistantBeforeSend?.productTotalSize != null &&
+        lastAssistantBeforeSend.productTotalSize >= 0
+          ? lastAssistantBeforeSend.productTotalSize
+          : undefined;
+      const previousProductTotalSizeIsApproximateForRequest =
+        previousProductTotalSizeForRequest != null && lastAssistantBeforeSend?.productTotalSizeIsApproximate === true
+          ? true
+          : undefined;
+
       try {
-        const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant' && !m.isError);
+        const skipPool = skipProductPoolNextRequestRef.current;
+        if (skipPool) {
+          skipProductPoolNextRequestRef.current = false;
+        }
         const productPool =
+          !skipPool &&
+          options?.fromSuggestedAnswer === true &&
           mode === 'convo_commerce' &&
           !options?.productPageToken &&
-          lastAssistant?.products &&
-          lastAssistant.products.length > 0
-            ? lastAssistant.products
+          lastAssistantBeforeSend?.products &&
+          lastAssistantBeforeSend.products.length > 0
+            ? lastAssistantBeforeSend.products
             : undefined;
 
         const response = await sendChatMessage({
@@ -418,6 +443,8 @@ export function useChat() {
           previousRefinedQuery: options?.previousRefinedQuery,
           productPageToken: options?.productPageToken,
           previousProductFilter: previousProductFilterForRequest,
+          previousProductTotalSize: previousProductTotalSizeForRequest,
+          previousProductTotalSizeIsApproximate: previousProductTotalSizeIsApproximateForRequest,
           productPageSize: productPageSize > 0 ? productPageSize : undefined,
           productPool,
         });
@@ -433,6 +460,7 @@ export function useChat() {
         } else if (!noProducts && response.productFilter && !poolRefine) {
           sessionProductFilterRef.current = response.productFilter;
         }
+        setActiveRetailSessionFilter(sessionProductFilterRef.current);
 
         const suppressSuggestionChips = shouldSuppressSuggestedAnswersWhenIngestingResponse(
           response.products,
@@ -694,8 +722,17 @@ export function useChat() {
     failedSuggestedValuesRef.current = new Set();
     sessionProductFilterRef.current = undefined;
     sessionFilterSnapshotRef.current = undefined;
+    skipProductPoolNextRequestRef.current = false;
+    setActiveRetailSessionFilter(undefined);
     stopSpeaking();
   }, [stopSpeaking]);
+
+  const clearRetailFilters = useCallback(() => {
+    sessionProductFilterRef.current = undefined;
+    sessionFilterSnapshotRef.current = undefined;
+    skipProductPoolNextRequestRef.current = true;
+    setActiveRetailSessionFilter(undefined);
+  }, []);
 
   return {
     mode,
@@ -725,5 +762,8 @@ export function useChat() {
     handleGetMoreSuggestions,
     handleLoadMore,
     startNewConversation,
+    hasActiveRetailFilter: Boolean(activeRetailSessionFilter),
+    activeRetailSessionFilter,
+    clearRetailFilters,
   };
 }

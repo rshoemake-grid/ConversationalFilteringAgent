@@ -135,6 +135,16 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             }
         }
 
+        String sessionFilterForMerge = sanitizeSessionProductFilter((String) context.get("previousProductFilter"));
+        searchQuery = RetailListingQueryResolver.chooseSearchQuery(
+                query,
+                searchQuery,
+                usedStorageTypeRecovery,
+                usedNoPreferenceRecovery,
+                result.queryType(),
+                (String) context.get("previousRefinedQuery"),
+                sessionFilterForMerge);
+
         if (searchQuery != null && !searchQuery.isEmpty()) {
             try {
                 String filter = buildBrandFilterWhenApplicable(query, result.suggestedAnswers(), context);
@@ -143,7 +153,7 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                             ? filter + " AND " + storageTypeFilter
                             : storageTypeFilter;
                 }
-                String session = sanitizeSessionProductFilter((String) context.get("previousProductFilter"));
+                String session = sessionFilterForMerge;
                 if (storageTypeFilter != null) {
                     session = RetailSessionFilterUtils.stripStorageAttributeAnyFilters(session);
                 }
@@ -180,7 +190,9 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
         if (products.isEmpty()) {
             log.info("Products empty; userQueryType={}", result.queryType() != null ? result.queryType() : "(none)");
         }
-        String refinedQuery = ((usedNoPreferenceRecovery || usedStorageTypeRecovery) && searchQuery != null) ? searchQuery : result.refinedQuery();
+        String refinedQuery = (searchQuery != null && !searchQuery.isBlank())
+                ? searchQuery.trim()
+                : result.refinedQuery();
         boolean isSearchingFallback = text.startsWith("Searching for:");
         boolean useConvoCommerceOnly = "convo_commerce".equals(context.get("orchestrationMode"));
         boolean hasRefinedQuery = refinedQuery != null && !refinedQuery.isEmpty();
@@ -332,7 +344,11 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
                 // Always show "No products found" when search returns empty. Include agent context if meaningful (not placeholder).
                 // Skip if we already handled via previous-agent fallback above.
                 boolean hasMeaningfulAgentText = text != null && !text.isEmpty() && !text.startsWith("Searching for:");
-                text = (hasMeaningfulAgentText ? text + "\n\n" : "") + "No products found.";
+                if (ClarifyingFollowUpPolicy.agentTextConflictsWithEmptyProductSearch(result.queryType())) {
+                    text = "No products found.";
+                } else {
+                    text = (hasMeaningfulAgentText ? text + "\n\n" : "") + "No products found.";
+                }
                 responseSource = "app";
             }
         }
@@ -381,7 +397,11 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             } else if (products.isEmpty() && hasRefinedQuery && !usedPreviousAgentFallback) {
                 // Always show "No products found" when search returns empty. Include agent context if meaningful (not placeholder).
                 boolean hasMeaningfulAgentText = text != null && !text.isEmpty() && !text.startsWith("Searching for:");
-                text = (hasMeaningfulAgentText ? text + "\n\n" : "") + "No products found.";
+                if (ClarifyingFollowUpPolicy.agentTextConflictsWithEmptyProductSearch(result.queryType())) {
+                    text = "No products found.";
+                } else {
+                    text = (hasMeaningfulAgentText ? text + "\n\n" : "") + "No products found.";
+                }
                 responseSource = "app";
             }
         }
@@ -414,6 +434,9 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             totalSize = Math.max(productsToReturn.size(), (long) pagesEstimate * pageSize);
             totalSizeIsApproximate = true;
         }
+        var narrowedDisplayTotal = ProductTotalSizeBaseline.adjustNarrowingDisplayTotal(totalSize, totalSizeIsApproximate, context);
+        totalSize = narrowedDisplayTotal.totalSize();
+        totalSizeIsApproximate = narrowedDisplayTotal.totalSizeIsApproximate();
         // Normalize "I found N products" to "Showing N of Y products" when we have totalSize
         if (totalSize >= 0 && productsToReturn != null && !productsToReturn.isEmpty()
                 && text != null && text.matches("I found \\d+ product(s)? matching your request\\.")) {

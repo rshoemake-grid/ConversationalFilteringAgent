@@ -550,10 +550,138 @@ describe('useChat', () => {
     expect(lastRaw.filterableAttributeNamesFromRaw).toEqual(['attributes.stockType'])
   })
 
-  it('startNewConversation clears messages, conversationId, input, and pending image', async () => {
+  it('clearRetailFilters drops previousProductFilter on subsequent sends', async () => {
+    const send = vi.mocked(chatApi.sendChatMessage)
+    send
+      .mockResolvedValueOnce({
+        text: 'Listed',
+        conversationId: 'c1',
+        products: [{ id: 'p1', title: 'Rice', description: '', price: '$1' }],
+        productFilter: 'brand:"UNCLE BENS"',
+      })
+      .mockResolvedValueOnce({ text: 'ok', conversationId: 'c1' })
+
+    const { result } = renderHook(() => useChat())
+    act(() => result.current.setInput('rice'))
+    await act(async () => result.current.handleSend())
+
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0][0].previousProductFilter).toBeUndefined()
+    expect(result.current.hasActiveRetailFilter).toBe(true)
+
+    act(() => result.current.clearRetailFilters())
+    expect(result.current.hasActiveRetailFilter).toBe(false)
+
+    act(() => result.current.setInput('uncle bens rice'))
+    await act(async () => result.current.handleSend())
+
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(send.mock.calls[1][0].previousProductFilter).toBeUndefined()
+  })
+
+  it('sends previousProductTotalSize when continuing with previousProductFilter', async () => {
+    const send = vi.mocked(chatApi.sendChatMessage)
+    send
+      .mockResolvedValueOnce({
+        text: 'Listed',
+        conversationId: 'c1',
+        products: [{ id: 'p1', title: 'Rice', description: '', price: '$1' }],
+        productFilter: 'attributes.stockType: ANY("DRY_STORAGE","D")',
+        productTotalSize: 5608,
+        productTotalSizeIsApproximate: true,
+      })
+      .mockResolvedValueOnce({
+        text: 'narrow',
+        conversationId: 'c1',
+        products: [{ id: 'p1', title: 'Rice', description: '', price: '$1' }],
+      })
+
+    const { result } = renderHook(() => useChat())
+    act(() => result.current.setInput('rice'))
+    await act(async () => result.current.handleSend())
+
+    expect(send.mock.calls[0][0].previousProductTotalSize).toBeUndefined()
+
+    act(() => result.current.setInput('tell me more'))
+    await act(async () => result.current.handleSend())
+
+    expect(send).toHaveBeenCalledTimes(2)
+    const second = send.mock.calls[1][0]
+    expect(second.previousProductFilter).toBeDefined()
+    expect(second.previousProductTotalSize).toBe(5608)
+    expect(second.previousProductTotalSizeIsApproximate).toBe(true)
+  })
+
+  it('omits productPool on the next request after clearRetailFilters', async () => {
+    const send = vi.mocked(chatApi.sendChatMessage)
+    send
+      .mockResolvedValueOnce({
+        text: 'Listed',
+        conversationId: 'c1',
+        refinedQuery: 'rice',
+        productFilter: 'attributes.stockType: ANY("DRY_STORAGE","D")',
+        products: [{ id: 'p1', title: 'Rice', description: '', price: '$1' }],
+      })
+      .mockResolvedValueOnce({
+        text: 'refine',
+        conversationId: 'c1',
+        refinedQuery: 'rice',
+        products: [{ id: 'p1', title: 'Rice', description: '', price: '$1' }],
+      })
+      .mockResolvedValueOnce({ text: 'ok', conversationId: 'c1', products: [] })
+
+    const { result } = renderHook(() => useChat())
+    act(() => result.current.setInput('rice'))
+    await act(async () => result.current.handleSend())
+
+    expect(send.mock.calls[0][0].productPool).toBeUndefined()
+
+    act(() => result.current.setInput('still looking'))
+    await act(async () => result.current.handleSend())
+
+    expect(send.mock.calls[1][0].productPool).toBeUndefined()
+
+    act(() => result.current.clearRetailFilters())
+
+    act(() => result.current.setInput('I would like some rice'))
+    await act(async () => result.current.handleSend())
+
+    expect(send).toHaveBeenCalledTimes(3)
+    expect(send.mock.calls[2][0].productPool).toBeUndefined()
+  })
+
+  it('sends productPool only for suggested-answer chips when last assistant has products', async () => {
+    const send = vi.mocked(chatApi.sendChatMessage)
+    const prod = { id: 'p1', title: 'Rice', description: '', price: '$1' }
+    send
+      .mockResolvedValueOnce({
+        text: 'Pick storage',
+        conversationId: 'c1',
+        refinedQuery: 'rice',
+        products: [prod],
+        suggestedAnswers: [{ displayText: 'Ambient', value: 'S' }],
+      })
+      .mockResolvedValueOnce({ text: 'ok', conversationId: 'c1', products: [prod] })
+
+    const { result } = renderHook(() => useChat())
+    act(() => result.current.setInput('rice'))
+    await act(async () => result.current.handleSend())
+
+    expect(send.mock.calls[0][0].productPool).toBeUndefined()
+
+    act(() => result.current.handleSuggestedAnswer({ displayText: 'Ambient', value: 'S' }))
+    await act(async () => {})
+
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(send.mock.calls[1][0].productPool).toEqual([prod])
+  })
+
+  it('startNewConversation clears messages, conversationId, input, pending image, and Retail session filter', async () => {
     vi.mocked(chatApi.sendChatMessage).mockResolvedValue({
       text: 'Hi!',
       conversationId: 'c1',
+      products: [{ id: 'p1', title: 'X', description: '', price: '$1' }],
+      productFilter: 'stockType:S',
     })
 
     const { result } = renderHook(() => useChat())
@@ -562,6 +690,7 @@ describe('useChat', () => {
 
     expect(result.current.messages).toHaveLength(2)
     expect(result.current.input).toBe('')
+    expect(result.current.hasActiveRetailFilter).toBe(true)
 
     act(() => {
       result.current.setInput('follow-up')
@@ -570,5 +699,6 @@ describe('useChat', () => {
 
     expect(result.current.messages).toEqual([])
     expect(result.current.input).toBe('')
+    expect(result.current.hasActiveRetailFilter).toBe(false)
   })
 })

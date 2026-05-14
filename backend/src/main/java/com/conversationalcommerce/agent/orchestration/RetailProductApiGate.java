@@ -3,34 +3,45 @@ package com.conversationalcommerce.agent.orchestration;
 import com.conversationalcommerce.agent.config.ConversationalCommerceConfig;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * PoC policy: after {@link com.conversationalcommerce.agent.agent.InitialCatalogAggregator} has run a product
- * listing phase for a conversation/session, block further Retail Search used for catalog listing and for
- * brand display resolution (same Search API). Does not block Product.get enrichment or conversational search.
- * <p>
- * Does not affect Retail conversational search (separate client). Scoped to the HTTP request thread via
- * {@link ThreadLocal}; parallel catalog fetches decide allowance on the submitting thread before work is queued.
+ * PoC policy: limit redundant Retail Search volume per conversation/session.
+ * <ul>
+ *   <li><b>Catalog listing</b> ({@link com.conversationalcommerce.agent.agent.InitialCatalogAggregator}): allow a new
+ *       search when {@code query} or {@code filter} differs from the last committed listing (so follow-ups like
+ *       "uncle bens" after "rice" still hit Retail).</li>
+ *   <li><b>Brand display</b> resolution: after any catalog listing in the session, skip further search-backed brand
+ *       lookups (same as historical single-shot behavior).</li>
+ * </ul>
+ * Does not block Product.get or conversational search. Uses {@link ThreadLocal} for the current chat turn key.
  */
 @Component
 public class RetailProductApiGate {
 
     private final ConversationalCommerceConfig config;
-    /** Conversation or session keys that have completed at least one catalog listing phase. */
-    private final Set<String> sealedKeys = ConcurrentHashMap.newKeySet();
+
+    /** Sessions that have completed at least one catalog listing (brand lookup stays off). */
+    private final Set<String> sessionHasCatalogListing = ConcurrentHashMap.newKeySet();
+
+    /** Last catalog listing fingerprint per session (normalized query + filter). */
+    private final ConcurrentHashMap<String, CatalogFingerprint> lastCatalogFingerprint = new ConcurrentHashMap<>();
 
     private static final ThreadLocal<TurnCtx> CTX = new ThreadLocal<>();
 
     private static final class TurnCtx {
         final String key;
-        final boolean blockedAtStart;
-        boolean listingCommitted;
 
-        TurnCtx(String key, boolean blockedAtStart) {
+        TurnCtx(String key) {
             this.key = key;
-            this.blockedAtStart = blockedAtStart;
+        }
+    }
+
+    private record CatalogFingerprint(String queryNorm, String filterNorm) {
+        boolean matches(String q, String f) {
+            return queryNorm.equals(q) && filterNorm.equals(f);
         }
     }
 
@@ -40,50 +51,74 @@ public class RetailProductApiGate {
 
     public void beginChatTurn(String conversationId, String sessionId) {
         if (!config.retailSingleShotPerConversation()) {
+            CTX.remove();
             return;
         }
-        String key = resolveKey(conversationId, sessionId);
-        boolean blocked = sealedKeys.contains(key);
-        CTX.set(new TurnCtx(key, blocked));
+        CTX.set(new TurnCtx(resolveKey(conversationId, sessionId)));
     }
 
     public void endChatTurn() {
-        try {
-            TurnCtx ctx = CTX.get();
-            if (ctx != null && config.retailSingleShotPerConversation() && ctx.key != null && ctx.listingCommitted) {
-                sealedKeys.add(ctx.key);
-            }
-        } finally {
-            CTX.remove();
-        }
+        CTX.remove();
     }
 
     /**
-     * Retail Search on the catalog branch (initial listing and brand lookup). Does not apply to Product.get.
+     * Retail Search for <strong>brand display</strong> and other non-catalog helpers. After the first catalog
+     * listing in a session, returns false (historical PoC behavior).
      */
     public boolean mayQueryRetailSearchApis() {
         if (!config.retailSingleShotPerConversation()) {
             return true;
         }
         TurnCtx ctx = CTX.get();
-        if (ctx == null) {
+        if (ctx == null || ctx.key == null) {
             return true;
         }
-        return !ctx.blockedAtStart;
+        return !sessionHasCatalogListing.contains(ctx.key);
     }
 
     /**
-     * Called on the request thread when {@link com.conversationalcommerce.agent.agent.InitialCatalogAggregator}
-     * is about to invoke Retail Search for catalog listing (so worker threads need not read this gate).
+     * Retail Search for {@link com.conversationalcommerce.agent.agent.InitialCatalogAggregator} catalog listing.
+     * When single-shot is enabled, blocks only repeats of the same normalized query+filter pair.
      */
-    public void noteRetailProductListingCommitted() {
+    public boolean mayQueryRetailCatalogSearch(String query, String filter) {
+        if (!config.retailSingleShotPerConversation()) {
+            return true;
+        }
+        TurnCtx ctx = CTX.get();
+        if (ctx == null || ctx.key == null) {
+            return true;
+        }
+        CatalogFingerprint prev = lastCatalogFingerprint.get(ctx.key);
+        if (prev == null) {
+            return true;
+        }
+        String q = normalizeQuerySlot(query);
+        String f = normalizeQuerySlot(filter);
+        return !prev.matches(q, f);
+    }
+
+    /**
+     * Record a catalog listing for the current turn's session. Called after {@link #mayQueryRetailCatalogSearch}
+     * allowed the request (caller may still get an empty result; we still dedupe that fingerprint).
+     */
+    public void noteRetailProductListingCommitted(String query, String filter) {
         if (!config.retailSingleShotPerConversation()) {
             return;
         }
         TurnCtx ctx = CTX.get();
-        if (ctx != null) {
-            ctx.listingCommitted = true;
+        if (ctx == null || ctx.key == null) {
+            return;
         }
+        String k = ctx.key;
+        lastCatalogFingerprint.put(k, new CatalogFingerprint(normalizeQuerySlot(query), normalizeQuerySlot(filter)));
+        sessionHasCatalogListing.add(k);
+    }
+
+    private static String normalizeQuerySlot(String s) {
+        if (s == null || s.isBlank()) {
+            return "";
+        }
+        return s.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
     static String resolveKey(String conversationId, String sessionId) {

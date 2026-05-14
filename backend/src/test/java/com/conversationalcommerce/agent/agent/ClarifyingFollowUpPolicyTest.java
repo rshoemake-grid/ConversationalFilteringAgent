@@ -55,4 +55,13 @@ class ClarifyingFollowUpPolicyTest {
         assertThat(ClarifyingFollowUpPolicy.clarifyingQuestionImpliesStorageChoice(null)).isFalse();
         assertThat(ClarifyingFollowUpPolicy.clarifyingQuestionImpliesStorageChoice("   ")).isFalse();
     }
+
+    @Test
+    void agentTextConflictsWithEmptyProductSearch_productNarrativeTypes() {
+        assertThat(ClarifyingFollowUpPolicy.agentTextConflictsWithEmptyProductSearch("PRODUCT_DETAILS")).isTrue();
+        assertThat(ClarifyingFollowUpPolicy.agentTextConflictsWithEmptyProductSearch("product_details")).isTrue();
+        assertThat(ClarifyingFollowUpPolicy.agentTextConflictsWithEmptyProductSearch("PRODUCT_COMPARISON")).isTrue();
+        assertThat(ClarifyingFollowUpPolicy.agentTextConflictsWithEmptyProductSearch("SIMPLE_PRODUCT_SEARCH")).isFalse();
+        assertThat(ClarifyingFollowUpPolicy.agentTextConflictsWithEmptyProductSearch(null)).isFalse();
+    }
 }

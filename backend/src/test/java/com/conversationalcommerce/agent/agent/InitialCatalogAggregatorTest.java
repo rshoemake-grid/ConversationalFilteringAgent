@@ -43,7 +43,7 @@ class InitialCatalogAggregatorTest {
         config.setRetailSingleShotPerConversation(true);
         var gate = new RetailProductApiGate(config);
         gate.beginChatTurn("c-block", "s-block");
-        gate.noteRetailProductListingCommitted();
+        gate.noteRetailProductListingCommitted("rice", null);
         gate.endChatTurn();
         gate.beginChatTurn("c-block", "s-block");
         aggregator = new InitialCatalogAggregator(searchClient, config, gate);
@@ -52,6 +52,26 @@ class InitialCatalogAggregatorTest {
 
         assertThat(out.products()).isEmpty();
         verifyNoInteractions(searchClient);
+        gate.endChatTurn();
+    }
+
+    @Test
+    void whenRetailSingleShotAllowsNewCatalogQueryAfterFirstFingerprint() {
+        config.setRetailSingleShotPerConversation(true);
+        var gate = new RetailProductApiGate(config);
+        gate.beginChatTurn("c-newq", "s-newq");
+        gate.noteRetailProductListingCommitted("rice", null);
+        gate.endChatTurn();
+        gate.beginChatTurn("c-newq", "s-newq");
+        aggregator = new InitialCatalogAggregator(searchClient, config, gate);
+        var p = AgentResponse.ProductResult.of("u1", "Uncle Bens", "", "", null);
+        when(searchClient.searchWithPagination(eq("pl"), eq("br"), eq("uncle bens"), any(), isNull(), isNull(), any(), isNull()))
+                .thenReturn(SearchResult.of(List.of(p), null, 1));
+
+        SearchResult out = aggregator.searchCatalog("pl", "br", "uncle bens", "v", null, null, null);
+
+        assertThat(out.products()).hasSize(1);
+        verify(searchClient).searchWithPagination(eq("pl"), eq("br"), eq("uncle bens"), any(), isNull(), isNull(), any(), isNull());
         gate.endChatTurn();
     }
 

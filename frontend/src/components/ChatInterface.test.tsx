@@ -34,6 +34,37 @@ describe('ChatInterface', () => {
     expect(screen.getByRole('combobox')).toBeInTheDocument()
   })
 
+  it('enables Clear Retail filters after a product response with productFilter, then clears session filter', async () => {
+    const send = vi.mocked(chatApi.sendChatMessage)
+    send
+      .mockResolvedValueOnce({
+        text: 'Showing products',
+        conversationId: 'c1',
+        products: [{ id: 'p1', title: 'Rice', description: '', price: '$2' }],
+        productFilter: 'stockType:S',
+      })
+      .mockResolvedValueOnce({ text: 'refined', conversationId: 'c1' })
+
+    render(<ChatInterface />)
+    const clearBtn = screen.getByRole('button', { name: /Clear Retail filters/i })
+    expect(clearBtn).toBeDisabled()
+
+    const input = screen.getByLabelText('Chat message')
+    await userEvent.type(input, 'rice')
+    await userEvent.click(screen.getByRole('button', { name: /Send message/i }))
+
+    await waitFor(() => expect(clearBtn).not.toBeDisabled())
+
+    await userEvent.click(clearBtn)
+    expect(clearBtn).toBeDisabled()
+
+    await userEvent.type(input, 'brand pick')
+    await userEvent.click(screen.getByRole('button', { name: /Send message/i }))
+
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(2))
+    expect(send.mock.calls[1][0].previousProductFilter).toBeUndefined()
+  })
+
   it('sends message on button click', async () => {
     vi.mocked(chatApi.sendChatMessage).mockResolvedValue({
       text: 'Hello!',

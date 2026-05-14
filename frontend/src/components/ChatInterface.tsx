@@ -41,6 +41,9 @@ export function ChatInterface() {
     handleGetMoreSuggestions,
     handleLoadMore,
     startNewConversation,
+    hasActiveRetailFilter,
+    activeRetailSessionFilter,
+    clearRetailFilters,
   } = useChat();
 
   const voiceRequiresChrome = useMemo(() => !isGoogleChrome(), []);
@@ -66,6 +69,20 @@ export function ChatInterface() {
             title="Start new conversation"
           >
             New conversation
+          </button>
+          <button
+            type="button"
+            onClick={clearRetailFilters}
+            disabled={loading || !hasActiveRetailFilter}
+            className="chat-header__toggle-raw"
+            aria-label="Clear Retail filters"
+            title={
+              hasActiveRetailFilter && activeRetailSessionFilter
+                ? `Clear accumulated Retail catalog filters (current: ${activeRetailSessionFilter.slice(0, 120)}${activeRetailSessionFilter.length > 120 ? '…' : ''}). The next message runs a fresh catalog search instead of reusing the last product grid.`
+                : 'No Retail catalog filters are applied in this session.'
+            }
+          >
+            Clear Retail filters
           </button>
           <ModeSelector
             value={mode}

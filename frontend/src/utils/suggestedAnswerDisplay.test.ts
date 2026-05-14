@@ -9,6 +9,7 @@ describe('suggestedAnswerDisplay', () => {
   it('maps storage codes when display equals value', () => {
     expect(suggestedAnswerDisplayLabel({ displayText: 'S', value: 'S' })).toBe('Ambient');
     expect(suggestedAnswerDisplayLabel({ displayText: 'R', value: 'R' })).toBe('Refrigerated');
+    expect(suggestedAnswerDisplayLabel({ displayText: 'N', value: 'N' })).toBe('Non-refrigerated');
   });
 
   it('keeps distinct displayText from API', () => {
