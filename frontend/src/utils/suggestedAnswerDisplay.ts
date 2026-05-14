@@ -19,7 +19,48 @@ export function suggestedAnswerDisplayLabel(sa: SuggestedAnswer): string {
   const d = (sa.displayText ?? '').trim();
   if (d && d !== v) return d;
   if (v.length <= 3 && STORAGE_LABELS[v]) return STORAGE_LABELS[v];
+  const pack = formatNumericDoubleUnderscoreUom(v);
+  if (pack) return pack;
   return d || v;
+}
+
+/** Catalog values like `3__LB` → `3 lb` for chip labels (matches backend BrandDisplayResolver). */
+function formatNumericDoubleUnderscoreUom(value: string): string | null {
+  const v = value.trim();
+  const sep = v.indexOf('__');
+  if (sep <= 0 || sep >= v.length - 2) return null;
+  const numPart = v.slice(0, sep);
+  const unitPart = v.slice(sep + 2);
+  if (!/^\d+(?:\.\d+)?$/.test(numPart) || !/^[A-Za-z][A-Za-z0-9_]*$/.test(unitPart)) return null;
+  return `${numPart} ${humanizeUomToken(unitPart)}`;
+}
+
+function humanizeUomToken(rawUnit: string): string {
+  const u = rawUnit.toUpperCase().replace(/_/g, '');
+  const map: Record<string, string> = {
+    LB: 'lb',
+    LBS: 'lb',
+    OZ: 'oz',
+    KG: 'kg',
+    G: 'g',
+    GM: 'g',
+    GRAM: 'g',
+    GRAMS: 'g',
+    CT: 'ct',
+    CNT: 'ct',
+    COUNT: 'ct',
+    PK: 'pk',
+    PACK: 'pk',
+    EA: 'each',
+    EACH: 'each',
+    ML: 'ml',
+    L: 'L',
+    LT: 'L',
+    LTR: 'L',
+    GAL: 'gal',
+  };
+  if (map[u]) return map[u];
+  return rawUnit.toLowerCase().replace(/_/g, ' ');
 }
 
 /**

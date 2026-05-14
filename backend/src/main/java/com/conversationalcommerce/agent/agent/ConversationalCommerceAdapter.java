@@ -148,6 +148,9 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
         if (searchQuery != null && !searchQuery.isEmpty()) {
             try {
                 String filter = buildBrandFilterWhenApplicable(query, result.suggestedAnswers(), context);
+                String packFacet = PackFacetRetailFilter.buildPackFacetFilterIfSuggestionSelected(
+                        query, result.suggestedAnswers(), context);
+                filter = ConversationalCommerceAdapter.combineRetailFilters(filter, packFacet);
                 if (storageTypeFilter != null) {
                     filter = (filter != null && !filter.isBlank())
                             ? filter + " AND " + storageTypeFilter
@@ -778,6 +781,7 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
         String trimmed = canonicalValue.trim();
         if (trimmed.length() < 2 || trimmed.length() > 50) return null;
         if (NON_BRAND_VALUES.contains(trimmed.toUpperCase())) return null;
+        if (BrandDisplayResolver.formatNumericDoubleUnderscoreUom(trimmed) != null) return null;
         boolean fromSelection = false;
         @SuppressWarnings("unchecked")
         var prevList = (List<Map<String, String>>) context.get("previousSuggestedAnswers");
@@ -790,6 +794,10 @@ public class ConversationalCommerceAdapter implements ConversationalAgent {
             }
         }
         boolean matchesCurrentSuggested = suggestedAnswers != null && suggestedAnswers.stream().anyMatch(sa -> trimmed.equals(sa.value()));
+        if ((fromSelection || matchesCurrentSuggested)
+                && trimmed.matches("\\d{1,4}")) {
+            return null;
+        }
         if ((fromSelection || matchesCurrentSuggested)) {
             String escaped = trimmed.replace("\\", "\\\\").replace("\"", "\\\"");
             return "brands: ANY(\"" + escaped + "\")";

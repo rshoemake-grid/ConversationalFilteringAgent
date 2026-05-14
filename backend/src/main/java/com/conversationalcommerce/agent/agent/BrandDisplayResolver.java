@@ -7,12 +7,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Resolves attribute values (e.g. brand codes) to display names. Uses config mapping first,
- * then runtime lookup via Retail Search API (products.brands), then title-case fallback.
+ * then common pack/UOM formatting (e.g. {@code 3__LB} → {@code 3 lb}), then runtime lookup via Retail Search API,
+ * then title-case fallback.
  */
 @Component
 public class BrandDisplayResolver {
@@ -76,6 +78,11 @@ public class BrandDisplayResolver {
             }
         }
 
+        String packOrUom = formatNumericDoubleUnderscoreUom(value.trim());
+        if (packOrUom != null) {
+            return packOrUom;
+        }
+
         // 2. Only try API lookup for brand-like attributes
         if (attrKey == null || !attrKey.contains("brand")) {
             return value;
@@ -137,6 +144,44 @@ public class BrandDisplayResolver {
 
         // 5. Title-case fallback for brand-like attributes
         return toTitleCase(value);
+    }
+
+    /**
+     * Catalog / VAISR often encodes pack or weight as {@code 3__LB} or {@code 12.5__OZ}. Returns a short label
+     * for chip text, or null when the value does not match that pattern.
+     */
+    public static String formatNumericDoubleUnderscoreUom(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String v = value.trim();
+        int sep = v.indexOf("__");
+        if (sep <= 0 || sep >= v.length() - 2) {
+            return null;
+        }
+        String numPart = v.substring(0, sep);
+        String unitPart = v.substring(sep + 2);
+        if (!numPart.matches("\\d+(?:\\.\\d+)?") || !unitPart.matches("[A-Za-z][A-Za-z0-9_]*")) {
+            return null;
+        }
+        return numPart + " " + humanizeUomToken(unitPart);
+    }
+
+    private static String humanizeUomToken(String rawUnit) {
+        String u = rawUnit.toUpperCase(Locale.ROOT).replace("_", "");
+        return switch (u) {
+            case "LB", "LBS" -> "lb";
+            case "OZ" -> "oz";
+            case "KG" -> "kg";
+            case "G", "GM", "GRAM", "GRAMS" -> "g";
+            case "CT", "CNT", "COUNT" -> "ct";
+            case "PK", "PACK" -> "pk";
+            case "EA", "EACH" -> "each";
+            case "ML" -> "ml";
+            case "L", "LT", "LTR" -> "L";
+            case "GAL" -> "gal";
+            default -> rawUnit.toLowerCase(Locale.ROOT).replace("_", " ");
+        };
     }
 
     /** Try system brands first, then custom attribute. */

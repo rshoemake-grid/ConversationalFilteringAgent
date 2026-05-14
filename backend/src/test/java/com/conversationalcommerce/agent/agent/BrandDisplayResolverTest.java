@@ -72,6 +72,25 @@ class BrandDisplayResolverTest {
     }
 
     @Test
+    void resolve_formatsDoubleUnderscorePackSize() {
+        resolver = new BrandDisplayResolver(config, null, new RetailProductApiGate(config));
+
+        assertThat(resolver.resolveDisplayText("attributes.netWeight", "3__LB")).isEqualTo("3 lb");
+        assertThat(resolver.resolveDisplayText("attributes.packSize", "12__OZ")).isEqualTo("12 oz");
+        assertThat(resolver.resolveDisplayText(null, "3__LB")).isEqualTo("3 lb");
+    }
+
+    @Test
+    void resolve_attributeMappingOverridesPackSizeFormat() {
+        config.setAttributeDisplayMapping(Map.of(
+                "packSize", Map.of("3__LB", "3-pound bag")
+        ));
+        resolver = new BrandDisplayResolver(config, null, new RetailProductApiGate(config));
+
+        assertThat(resolver.resolveDisplayText("attributes.packSize", "3__LB")).isEqualTo("3-pound bag");
+    }
+
+    @Test
     void resolve_configTakesPrecedenceOverApi() {
         config.setAttributeDisplayMapping(Map.of("brands", Map.of("NIKE", "Custom Nike")));
         resolver = new BrandDisplayResolver(config, new StubSearchClient(), new RetailProductApiGate(config));

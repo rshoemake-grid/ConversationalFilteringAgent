@@ -1,9 +1,11 @@
 package com.conversationalcommerce.agent.orchestration;
 
 import com.conversationalcommerce.agent.agent.AgentResponse;
+import com.conversationalcommerce.agent.agent.BrandDisplayResolver;
 import com.conversationalcommerce.agent.agent.ClarifyingFollowUpPolicy;
 import com.conversationalcommerce.agent.agent.ConversationalCommerceClient;
 import com.conversationalcommerce.agent.agent.InitialCatalogAggregator;
+import com.conversationalcommerce.agent.agent.PackFacetRetailFilter;
 import com.conversationalcommerce.agent.agent.ProductEnrichmentService;
 import com.conversationalcommerce.agent.agent.ProductTotalSizeBaseline;
 import com.conversationalcommerce.agent.agent.RetailListingQueryResolver;
@@ -137,6 +139,9 @@ public class VaisrRetailProductResolver {
         if (searchQuery != null && !searchQuery.isEmpty()) {
             try {
                 String filter = buildBrandFilterWhenApplicable(query, result.suggestedAnswers(), context);
+                String packFacet = PackFacetRetailFilter.buildPackFacetFilterIfSuggestionSelected(
+                        query, result.suggestedAnswers(), context);
+                filter = combineRetailFilters(filter, packFacet);
                 if (storageTypeFilter != null) {
                     filter = (filter != null && !filter.isBlank())
                             ? filter + " AND " + storageTypeFilter
@@ -552,6 +557,9 @@ public class VaisrRetailProductResolver {
         if (NON_BRAND_VALUES.contains(trimmed.toUpperCase())) {
             return null;
         }
+        if (BrandDisplayResolver.formatNumericDoubleUnderscoreUom(trimmed) != null) {
+            return null;
+        }
         boolean fromSelection = false;
         @SuppressWarnings("unchecked")
         var prevList = (List<Map<String, String>>) context.get("previousSuggestedAnswers");
@@ -566,6 +574,10 @@ public class VaisrRetailProductResolver {
         }
         boolean matchesCurrentSuggested = suggestedAnswers != null && suggestedAnswers.stream()
                 .anyMatch(sa -> trimmed.equals(sa.value()));
+        if ((fromSelection || matchesCurrentSuggested)
+                && trimmed.matches("\\d{1,4}")) {
+            return null;
+        }
         if (fromSelection || matchesCurrentSuggested) {
             String escaped = trimmed.replace("\\", "\\\\").replace("\"", "\\\"");
             return "brands: ANY(\"" + escaped + "\")";

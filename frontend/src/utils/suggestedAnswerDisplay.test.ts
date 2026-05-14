@@ -12,6 +12,12 @@ describe('suggestedAnswerDisplay', () => {
     expect(suggestedAnswerDisplayLabel({ displayText: 'N', value: 'N' })).toBe('Non-refrigerated');
   });
 
+  it('formats pack/UOM tokens with double underscore', () => {
+    expect(suggestedAnswerDisplayLabel({ displayText: '3__LB', value: '3__LB' })).toBe('3 lb');
+    expect(suggestedAnswerDisplayLabel({ displayText: '12__OZ', value: '12__OZ' })).toBe('12 oz');
+    expect(suggestedAnswerDisplayLabel({ displayText: '4', value: '4' })).toBe('4');
+  });
+
   it('keeps distinct displayText from API', () => {
     expect(suggestedAnswerDisplayLabel({ displayText: 'Ambient', value: 'S' })).toBe('Ambient');
   });
